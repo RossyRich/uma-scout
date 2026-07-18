@@ -177,7 +177,9 @@ async function init(){
   try{
     const idx=await (await fetch("predictions/index.json",{cache:"no-store"})).json();
     const params=new URLSearchParams(location.search);
-    let date=params.get("date")||idx.dates[0];
+    const now=new Date(Date.now()+9*3600*1000);  // JST
+    const today=now.toISOString().slice(0,10).replace(/-/g,"");
+    let date=params.get("date")||(idx.dates.includes(today)?today:idx.dates[0]);
     if(!idx.dates.includes(date)) date=idx.dates[0];
     // 日付ボタン(最新2件=今週末)
     const db=$("#dates"); db.innerHTML="";
