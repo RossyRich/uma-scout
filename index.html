@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>ウマスカウト | AI競馬予想</title>
+<meta name="description" content="Claudeが毎週土日の朝に中央競馬全レースを予想。馬連主軸の買い目を公開。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Oswald:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0f1013; --panel:#17181d; --panel2:#1d1f26; --line:#2a2c35;
+  --text:#e9e7e2; --sub:#8f929e; --accent:#e6432e; --gold:#d9b45b;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  background:var(--bg); color:var(--text);
+  font-family:"Zen Kaku Gothic New","Hiragino Kaku Gothic ProN",sans-serif;
+  font-size:15px; line-height:1.6;
+  padding-bottom:60px;
+}
+.wrap{max-width:640px;margin:0 auto}
+
+/* ── header ── */
+header{padding:20px 16px 0 16px}
+.brand{display:flex;flex-direction:column;gap:2px}
+.brand h1{font-size:26px;font-weight:900;letter-spacing:.06em;white-space:nowrap}
+.brand h1 .u{color:var(--accent)}
+.brand .en{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:.3em;color:var(--sub);text-transform:uppercase}
+.dateline{display:flex;align-items:center;justify-content:space-between;margin-top:14px}
+.dates{display:flex;gap:8px}
+.datebtn{
+  border:1px solid var(--line);background:var(--panel);color:var(--sub);
+  padding:5px 14px;border-radius:3px;font-size:13px;font-weight:700;cursor:pointer;
+  font-family:inherit;
+}
+.datebtn.on{background:var(--text);color:var(--bg);border-color:var(--text)}
+.datebtn .dow{font-size:11px;margin-left:2px}
+.dow.sat{color:#4d8fd6}.dow.sun{color:var(--accent)}
+.datebtn.on .dow.sat{color:#1d5fa6}.datebtn.on .dow.sun{color:#c22}
+.updated{font-size:11px;color:var(--sub);text-align:right;line-height:1.4}
+
+/* ── venue tabs ── */
+nav{
+  position:sticky;top:0;z-index:10;background:var(--bg);
+  border-bottom:1px solid var(--line);margin-top:16px;
+}
+.tabs{display:flex;max-width:640px;margin:0 auto}
+.tab{
+  flex:1;text-align:center;padding:12px 0 10px;cursor:pointer;
+  color:var(--sub);font-weight:700;font-size:15px;letter-spacing:.15em;
+  border-bottom:2px solid transparent;background:none;border-top:none;border-left:none;border-right:none;
+  font-family:inherit;
+}
+.tab.on{color:var(--text);border-bottom-color:var(--accent)}
+
+/* ── race cards ── */
+main{padding:14px 12px}
+details.race{
+  background:var(--panel);border:1px solid var(--line);border-radius:6px;
+  margin-bottom:10px;overflow:hidden;
+}
+details.race[open]{border-color:#3a3d49}
+summary{
+  list-style:none;display:flex;align-items:center;gap:10px;
+  padding:12px 14px;cursor:pointer;-webkit-tap-highlight-color:transparent;
+}
+summary::-webkit-details-marker{display:none}
+.rno{
+  font-family:Oswald,sans-serif;font-size:17px;font-weight:600;color:var(--text);
+  min-width:38px;text-align:center;border-right:1px solid var(--line);padding-right:8px;
+}
+.rmeta{flex:1;min-width:0}
+.rname{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rsub{font-size:11px;color:var(--sub)}
+.rpick{text-align:right;min-width:0}
+.rpick .m{color:var(--accent);font-size:12px}
+.rpick .n{font-size:12px;font-weight:700;white-space:nowrap}
+.conf{
+  font-family:Oswald,sans-serif;font-size:13px;font-weight:600;
+  width:26px;height:26px;border-radius:3px;display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+}
+.conf.S{background:var(--accent);color:#fff}
+.conf.A{background:#b06a2c;color:#fff}
+.conf.B{background:#3a4256;color:#cfd4e0}
+.conf.C{background:#4a3a56;color:#d8cfe0}
+.body{border-top:1px solid var(--line);padding:12px 14px 14px}
+
+/* marks */
+.mk{display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px dashed #24262e}
+.mk:last-child{border-bottom:none}
+.mk .mark{width:20px;font-size:16px;text-align:center;flex-shrink:0}
+.mk .mark.hon{color:var(--accent);font-weight:900}
+.mk .mark.taikou{color:var(--text)}
+.mk .mark.tan{color:var(--gold)}
+.mk .mark.osae{color:var(--sub)}
+.num{
+  font-family:Oswald,sans-serif;font-weight:600;font-size:13px;
+  width:22px;height:22px;border-radius:2px;display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+}
+.w1{background:#f2f0eb;color:#111}
+.w2{background:#26272c;color:#fff;box-shadow:inset 0 0 0 1px #4a4c55}
+.w3{background:#d6402e;color:#fff}
+.w4{background:#2b6fd6;color:#fff}
+.w5{background:#e3c33a;color:#111}
+.w6{background:#2f9e5f;color:#fff}
+.w7{background:#e8842e;color:#fff}
+.w8{background:#e078a0;color:#fff}
+.mk .info{flex:1;min-width:0}
+.mk .hname{font-weight:700;font-size:14px}
+.mk .hcmt{font-size:11px;color:var(--sub);line-height:1.45}
+.mk .odds{font-family:Oswald,sans-serif;font-size:12px;color:var(--sub);text-align:right;flex-shrink:0;line-height:1.3}
+.mk .odds b{display:block;color:var(--text);font-size:13px;font-weight:600}
+
+/* summary + bets */
+.rsummary{
+  font-size:12.5px;color:#c9c7c1;background:var(--panel2);
+  border-left:3px solid var(--accent);padding:8px 10px;margin:12px 0;border-radius:0 4px 4px 0;
+}
+.bets{display:flex;flex-direction:column;gap:8px}
+.bet{display:flex;gap:10px;align-items:flex-start}
+.btype{
+  flex-shrink:0;width:58px;text-align:center;font-size:11px;font-weight:700;
+  padding:4px 0;border-radius:3px;background:var(--panel2);color:var(--sub);
+  border:1px solid var(--line);margin-top:1px;
+}
+.bet.main .btype{background:var(--accent);color:#fff;border-color:var(--accent)}
+.bpts{display:flex;flex-wrap:wrap;gap:5px;flex:1}
+.pt{
+  font-family:Oswald,sans-serif;font-size:13px;font-weight:500;letter-spacing:.05em;
+  background:var(--panel2);border:1px solid var(--line);
+  padding:2px 8px;border-radius:3px;
+}
+.bet.main .pt{border-color:#5a3a38;background:#241a19}
+.axis{font-size:10px;color:var(--accent);font-weight:700;letter-spacing:.2em;margin-left:4px}
+
+/* footer */
+footer{padding:26px 16px 10px;text-align:center;color:#5c5f6a;font-size:10.5px;line-height:1.8}
+.loading{text-align:center;color:var(--sub);padding:60px 0;font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="brand">
+    <h1>ウマスカウト<span class="u">◎</span></h1>
+    <span class="en">AI Keiba Predictions</span>
+  </div>
+  <div class="dateline">
+    <div class="dates" id="dates"></div>
+    <div class="updated" id="updated"></div>
+  </div>
+</header>
+<nav><div class="tabs" id="tabs"></div></nav>
+<main id="main"><div class="loading">読み込み中…</div></main>
+<footer>
+  本予想はAI(Claude)による参考情報であり、的中を保証するものではありません。<br>
+  馬券の購入は自己責任で。20歳未満の方は馬券を購入できません。
+</footer>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+let DATA=null, venueIdx=0;
+const DOW=["日","月","火","水","木","金","土"];
+
+function fmtDate(d){
+  const y=d.slice(0,4),m=+d.slice(4,6),dd=+d.slice(6,8);
+  const dow=new Date(+y,m-1,dd).getDay();
+  return {label:`${m}/${dd}`, dow:DOW[dow], cls:dow===0?"sun":dow===6?"sat":""};
+}
+
+async function init(){
+  try{
+    const idx=await (await fetch("predictions/index.json",{cache:"no-store"})).json();
+    const params=new URLSearchParams(location.search);
+    let date=params.get("date")||idx.dates[0];
+    if(!idx.dates.includes(date)) date=idx.dates[0];
+    // 日付ボタン(最新2件=今週末)
+    const db=$("#dates"); db.innerHTML="";
+    idx.dates.slice(0,2).sort().forEach(d=>{
+      const f=fmtDate(d);
+      const b=document.createElement("button");
+      b.className="datebtn"+(d===date?" on":"");
+      b.innerHTML=`${f.label}<span class="dow ${f.cls}">${f.dow}</span>`;
+      b.onclick=()=>{history.replaceState(null,"",`?date=${d}`);init();};
+      db.appendChild(b);
+    });
+    DATA=await (await fetch(`predictions/${date}.json`,{cache:"no-store"})).json();
+    $("#updated").textContent=`${DATA.updated} 更新`;
+    renderTabs();
+    render();
+  }catch(e){
+    $("#main").innerHTML=`<div class="loading">データを読み込めませんでした。<br>まだ今週の予想が生成されていない可能性があります。</div>`;
+  }
+}
+
+function renderTabs(){
+  const t=$("#tabs"); t.innerHTML="";
+  DATA.venues.forEach((v,i)=>{
+    const b=document.createElement("button");
+    b.className="tab"+(i===venueIdx?" on":"");
+    b.textContent=v.name;
+    b.onclick=()=>{venueIdx=i;renderTabs();render();window.scrollTo({top:0});};
+    t.appendChild(b);
+  });
+}
+
+const MARKCLS={"◎":"hon","◯":"taikou","○":"taikou","▲":"tan","△":"osae","☆":"tan"};
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function render(){
+  const v=DATA.venues[venueIdx];
+  const main=$("#main"); main.innerHTML="";
+  v.races.forEach(r=>{
+    const hmap={}; (r.horses||[]).forEach(h=>hmap[h.num]=h);
+    const hon=(r.marks||[])[0];
+    const d=document.createElement("details");
+    d.className="race";
+    const marksHtml=(r.marks||[]).map(m=>{
+      const h=hmap[m.num]||{};
+      const oddsHtml=h.odds?`<div class="odds"><b>${h.odds}</b>${h.pop?h.pop+"人気":""}</div>`:"";
+      return `<div class="mk">
+        <span class="mark ${MARKCLS[m.mark]||"osae"}">${esc(m.mark)}</span>
+        <span class="num w${h.waku||1}">${m.num}</span>
+        <div class="info">
+          <div class="hname">${esc(m.name)}<span style="color:var(--sub);font-size:11px;font-weight:400"> ${esc(h.jockey||"")}</span></div>
+          <div class="hcmt">${esc(m.comment||"")}</div>
+        </div>${oddsHtml}</div>`;
+    }).join("");
+    const B=r.bets||{};
+    const betRow=(label,key,main)=>{
+      const pts=B[key]||[];
+      if(!pts.length) return "";
+      return `<div class="bet${main?" main":""}">
+        <span class="btype">${label}${main?'<span class="axis">主軸</span>':""}</span>
+        <div class="bpts">${pts.map(p=>`<span class="pt">${esc(p)}</span>`).join("")}</div>
+      </div>`;
+    };
+    d.innerHTML=`
+      <summary>
+        <span class="rno">${r.no}R</span>
+        <div class="rmeta">
+          <div class="rname">${esc(r.name)}</div>
+          <div class="rsub">${esc(r.time)} / ${esc(r.course)} / ${r.head}頭</div>
+        </div>
+        <div class="rpick"><span class="m">◎</span><span class="n">${esc(hon?hon.name:"")}</span></div>
+        <span class="conf ${esc(r.confidence||"B")}">${esc(r.confidence||"B")}</span>
+      </summary>
+      <div class="body">
+        ${marksHtml}
+        <div class="rsummary">${esc(r.summary||"")}</div>
+        <div class="bets">
+          ${betRow("単勝","tansho",false)}
+          ${betRow("馬連","umaren",true)}
+          ${betRow("三連複","sanrenpuku",false)}
+          ${betRow("三連単","sanrentan",false)}
+        </div>
+      </div>`;
+    main.appendChild(d);
+  });
+}
+init();
+</script>
+</body>
+</html>
