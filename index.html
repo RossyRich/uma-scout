@@ -87,8 +87,6 @@ summary::-webkit-details-marker{display:none}
 .conf.A{background:#b06a2c;color:#fff}
 .conf.B{background:#3a4256;color:#cfd4e0}
 .conf.C{background:#4a3a56;color:#d8cfe0}
-.confwrap{display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0;min-width:38px}
-.conflabel{font-size:9px;color:var(--sub);letter-spacing:.05em;white-space:nowrap}
 .body{border-top:1px solid var(--line);padding:12px 14px 14px}
 
 /* marks */
@@ -161,10 +159,11 @@ summary::-webkit-details-marker{display:none}
 footer{padding:26px 16px 10px;text-align:center;color:#5c5f6a;font-size:10.5px;line-height:1.8}
 .legend{
   display:flex;justify-content:center;align-items:center;gap:12px;flex-wrap:wrap;
-  margin-bottom:14px;color:#8f929e;font-size:11px;
+  color:#8f929e;font-size:11px;
 }
 .legend span{display:inline-flex;align-items:center;gap:4px}
 .legend i.conf{font-style:normal;width:18px;height:18px;font-size:11px;display:inline-flex}
+.legend-top{justify-content:flex-start;padding:0 2px;margin-bottom:10px}
 .loading{text-align:center;color:var(--sub);padding:60px 0;font-size:13px}
 </style>
 </head>
@@ -184,13 +183,6 @@ footer{padding:26px 16px 10px;text-align:center;color:#5c5f6a;font-size:10.5px;l
 <nav><div class="tabs" id="tabs"></div></nav>
 <main id="main"><div class="loading">読み込み中…</div></main>
 <footer>
-  <div class="legend">
-    自信度:
-    <span><i class="conf S">S</i>鉄板</span>
-    <span><i class="conf A">A</i>有力</span>
-    <span><i class="conf B">B</i>混戦</span>
-    <span><i class="conf C">C</i>荒れ模様</span>
-  </div>
   本予想はAI(Claude)による参考情報であり、的中を保証するものではありません。<br>
   馬券の購入は自己責任で。20歳未満の方は馬券を購入できません。
 </footer>
@@ -246,7 +238,7 @@ function renderWin5(){
   const legs=w.races.map((l,i)=>`
     <div class="w5leg">
       <span class="lno">${i+1}</span>
-      <div class="lrace"><b>${esc(l.venue)}${l.no}R ${esc(l.name)}</b><span>${esc(l.time)}発走 / 自信度${esc(l.confidence)}(${CONFLABEL[l.confidence]||"混戦"})</span></div>
+      <div class="lrace"><b>${esc(l.venue)}${l.no}R ${esc(l.name)}</b><span>${esc(l.time)}発走 / 自信度${esc(l.confidence)}</span></div>
       <div class="lpicks">${l.picks.map(p=>`<span class="num w${wakuOf(l.race_id,p.num)}" title="${esc(p.name)}">${p.num}</span>`).join("")}</div>
     </div>`).join("");
   box.innerHTML=`<div class="win5">
@@ -273,6 +265,13 @@ const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&g
 function render(){
   const v=DATA.venues[venueIdx];
   const main=$("#main"); main.innerHTML="";
+  main.insertAdjacentHTML("beforeend",`<div class="legend legend-top">
+    自信度:
+    <span><i class="conf S">S</i>鉄板</span>
+    <span><i class="conf A">A</i>有力</span>
+    <span><i class="conf B">B</i>混戦</span>
+    <span><i class="conf C">C</i>荒れ模様</span>
+  </div>`);
   v.races.forEach(r=>{
     const hmap={}; (r.horses||[]).forEach(h=>hmap[h.num]=h);
     const hon=(r.marks||[])[0];
@@ -306,10 +305,7 @@ function render(){
           <div class="rsub">${esc(r.time)} / ${esc(r.course)} / ${r.head}頭</div>
         </div>
         <div class="rpick"><span class="m">◎</span><span class="n">${esc(hon?hon.name:"")}</span></div>
-        <span class="confwrap">
-          <span class="conf ${esc(r.confidence||"B")}">${esc(r.confidence||"B")}</span>
-          <span class="conflabel">${CONFLABEL[r.confidence]||"混戦"}</span>
-        </span>
+        <span class="conf ${esc(r.confidence||"B")}">${esc(r.confidence||"B")}</span>
       </summary>
       <div class="body">
         ${marksHtml}
