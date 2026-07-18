@@ -138,6 +138,23 @@ summary::-webkit-details-marker{display:none}
 .bet.main .pt{border-color:#5a3a38;background:#241a19}
 .axis{font-size:10px;color:var(--accent);font-weight:700;letter-spacing:.2em;margin-left:4px}
 
+/* WIN5 */
+.win5{
+  margin:14px 12px 0;background:linear-gradient(135deg,#1c1a14,#17181d 60%);
+  border:1px solid #3d3623;border-radius:6px;padding:12px 14px;
+}
+.win5 .w5head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px}
+.win5 .w5title{font-family:Oswald,sans-serif;font-size:16px;font-weight:600;letter-spacing:.15em;color:var(--gold)}
+.win5 .w5pts{font-size:11px;color:var(--sub)}
+.win5 .w5pts b{color:var(--text);font-family:Oswald,sans-serif;font-size:14px}
+.w5leg{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px dashed #2e2a1e}
+.w5leg:last-child{border-bottom:none}
+.w5leg .lno{font-family:Oswald,sans-serif;font-size:11px;color:var(--gold);width:14px;flex-shrink:0}
+.w5leg .lrace{font-size:12px;min-width:0;flex:1}
+.w5leg .lrace b{font-size:12.5px}
+.w5leg .lrace span{color:var(--sub);font-size:10.5px;display:block}
+.w5leg .lpicks{display:flex;gap:4px;flex-shrink:0}
+
 /* footer */
 footer{padding:26px 16px 10px;text-align:center;color:#5c5f6a;font-size:10.5px;line-height:1.8}
 .loading{text-align:center;color:var(--sub);padding:60px 0;font-size:13px}
@@ -155,6 +172,7 @@ footer{padding:26px 16px 10px;text-align:center;color:#5c5f6a;font-size:10.5px;l
     <div class="updated" id="updated"></div>
   </div>
 </header>
+<div id="win5box"></div>
 <nav><div class="tabs" id="tabs"></div></nav>
 <main id="main"><div class="loading">読み込み中…</div></main>
 <footer>
@@ -193,11 +211,33 @@ async function init(){
     });
     DATA=await (await fetch(`predictions/${date}.json`,{cache:"no-store"})).json();
     $("#updated").textContent=`${DATA.updated} 更新`;
+    renderWin5();
     renderTabs();
     render();
   }catch(e){
     $("#main").innerHTML=`<div class="loading">データを読み込めませんでした。<br>まだ今週の予想が生成されていない可能性があります。</div>`;
   }
+}
+
+function renderWin5(){
+  const box=$("#win5box"); box.innerHTML="";
+  const w=DATA.win5;
+  if(!w) return;
+  const wakuOf=(rid,num)=>{
+    for(const v of DATA.venues) for(const r of v.races)
+      if(r.race_id===rid){const h=(r.horses||[]).find(h=>h.num===num);return h?h.waku:1;}
+    return 1;
+  };
+  const legs=w.races.map((l,i)=>`
+    <div class="w5leg">
+      <span class="lno">${i+1}</span>
+      <div class="lrace"><b>${esc(l.venue)}${l.no}R ${esc(l.name)}</b><span>${esc(l.time)}発走 / 自信度${esc(l.confidence)}</span></div>
+      <div class="lpicks">${l.picks.map(p=>`<span class="num w${wakuOf(l.race_id,p.num)}" title="${esc(p.name)}">${p.num}</span>`).join("")}</div>
+    </div>`).join("");
+  box.innerHTML=`<div class="win5">
+    <div class="w5head"><span class="w5title">WIN5</span><span class="w5pts">フォーメーション <b>${w.points}</b> 点</span></div>
+    ${legs}
+  </div>`;
 }
 
 function renderTabs(){
