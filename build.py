@@ -18,8 +18,10 @@ from datetime import datetime, timezone, timedelta
 BASE = os.path.dirname(os.path.abspath(__file__))
 VENUE_ORDER = ["札幌", "函館", "福島", "新潟", "東京", "中山", "中京", "京都", "阪神", "小倉"]
 
-# WIN5: 各自信度で何頭まで流すか (◎◯▲△の順)
-WIN5_PICKS = {"S": 1, "A": 2, "B": 3, "C": 4}
+# WIN5: 各自信度で何頭まで流すか (◎◯▲△の順)。基本2頭まで、混戦(C)のみ3頭を許容
+WIN5_PICKS = {"S": 1, "A": 2, "B": 2, "C": 3}
+# 合計点数の上限 (100円×50点=5,000円)
+WIN5_MAX_POINTS = 50
 
 
 def win5_race_ids_from_netkeiba(date):
@@ -65,10 +67,9 @@ def add_win5(out):
             return
 
     legs = []
-    points = 1
     for rid in ids:
         venue, r, _ = all_races[rid]
-        n = WIN5_PICKS.get(r.get("confidence", "B"), 3)
+        n = WIN5_PICKS.get(r.get("confidence", "B"), 2)
         picks = [{"num": m["num"], "name": m["name"]} for m in r.get("marks", [])[:n]]
         if not picks:
             return
@@ -76,8 +77,21 @@ def add_win5(out):
             "race_id": rid, "venue": venue, "no": r["no"], "name": r["name"],
             "time": r["time"], "confidence": r.get("confidence", "B"), "picks": picks,
         })
-        points *= len(picks)
-    out["win5"] = {"races": legs, "points": points}
+
+    def total(ls):
+        p = 1
+        for l in ls:
+            p *= len(l["picks"])
+        return p
+
+    # 上限を超えたら、頭数の多いレースから1頭ずつ削る (△→▲の順に外す)
+    while total(legs) > WIN5_MAX_POINTS:
+        widest = max(legs, key=lambda l: len(l["picks"]))
+        if len(widest["picks"]) <= 1:
+            break
+        widest["picks"].pop()
+
+    out["win5"] = {"races": legs, "points": total(legs)}
 
 
 def main():
