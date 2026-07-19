@@ -159,6 +159,25 @@ summary::-webkit-details-marker{display:none}
 .w5leg .lrace span{color:var(--sub);font-size:10.5px;display:block}
 .w5leg .lpicks{display:flex;gap:4px;flex-shrink:0}
 
+/* 成績 */
+.restitle{font-weight:700;font-size:13px;color:var(--text);margin:18px 2px 8px;letter-spacing:.05em}
+.restitle:first-child{margin-top:4px}
+.tblwrap{overflow-x:auto}
+.restbl{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden;font-size:12px}
+.restbl th,.restbl td{padding:8px 6px;text-align:center;border-bottom:1px solid #22242c}
+.restbl th{color:var(--sub);font-weight:700;font-size:11px}
+.restbl td b{color:var(--accent)}
+.restbl .totrow td{font-family:Oswald,sans-serif;font-size:13px;color:var(--sub)}
+.restbl .totrow td.plus{color:var(--gold);font-weight:600}
+.resnote{font-size:10.5px;color:#5c5f6a;margin:6px 2px 0;line-height:1.6}
+.resrace{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:9px 12px;margin-bottom:8px}
+.resrace.hit{border-color:#5a3a38}
+.rr1{display:flex;justify-content:space-between;align-items:center}
+.rrname{font-weight:700;font-size:13px}
+.rr2{font-size:11.5px;color:var(--sub);margin-top:2px}
+.rr3{font-size:12px;margin-top:3px;color:#5c5f6a}
+.resrace.hit .rr3{color:var(--gold);font-weight:700}
+
 /* footer */
 footer{padding:26px 16px 10px;text-align:center;color:#5c5f6a;font-size:10.5px;line-height:1.8}
 .legend{
@@ -202,17 +221,26 @@ function fmtDate(d){
   return {label:`${m}/${dd}`, dow:DOW[dow], cls:dow===0?"sun":dow===6?"sat":""};
 }
 
+function jstDate(offsetDays){
+  const d=new Date(Date.now()+9*3600*1000+(offsetDays||0)*86400*1000);
+  return d.toISOString().slice(0,10).replace(/-/g,"");
+}
+
 async function init(){
   try{
     const idx=await (await fetch("predictions/index.json",{cache:"no-store"})).json();
     const params=new URLSearchParams(location.search);
-    const now=new Date(Date.now()+9*3600*1000);  // JST
-    const today=now.toISOString().slice(0,10).replace(/-/g,"");
-    let date=params.get("date")||(idx.dates.includes(today)?today:idx.dates[0]);
-    if(!idx.dates.includes(date)) date=idx.dates[0];
-    // 日付ボタン(最新2件=今週末)
+    const today=jstDate(0);
+    const dow=new Date(Date.now()+9*3600*1000).getUTCDay();
+    // 表示する日付ボタン: 週末は今週の土日(未公開日も含む)、平日は直近の公開分
+    let buttons;
+    if(dow===6) buttons=[today,jstDate(1)];
+    else if(dow===0) buttons=[jstDate(-1),today];
+    else buttons=idx.dates.slice(0,2).sort();
+    let date=params.get("date")||(buttons.includes(today)?today:buttons[buttons.length-1]);
+    if(!buttons.includes(date)&&!idx.dates.includes(date)) date=buttons[buttons.length-1];
     const db=$("#dates"); db.innerHTML="";
-    idx.dates.slice(0,2).sort().forEach(d=>{
+    buttons.forEach(d=>{
       const f=fmtDate(d);
       const b=document.createElement("button");
       b.className="datebtn"+(d===date?" on":"");
@@ -220,6 +248,16 @@ async function init(){
       b.onclick=()=>{history.replaceState(null,"",`?date=${d}`);init();};
       db.appendChild(b);
     });
+    if(!idx.dates.includes(date)){
+      // まだ公開されていない日 (当日朝8時の自動更新で公開される)
+      DATA=null;
+      $("#updated").textContent="";
+      $("#win5box").innerHTML="";
+      renderTabs();
+      const f=fmtDate(date);
+      $("#main").innerHTML=`<div class="loading">${f.label}(${f.dow})の予想は、<br>当日の朝8時ごろに公開されます。<br><br>公開までしばらくお待ちください🐴</div>`;
+      return;
+    }
     DATA=await (await fetch(`predictions/${date}.json`,{cache:"no-store"})).json();
     $("#updated").textContent=`${DATA.updated} 更新`;
     renderWin5();
@@ -253,13 +291,96 @@ function renderWin5(){
 
 function renderTabs(){
   const t=$("#tabs"); t.innerHTML="";
-  DATA.venues.forEach((v,i)=>{
+  if(DATA&&venueIdx>=DATA.venues.length) venueIdx=0;
+  (DATA?DATA.venues:[]).forEach((v,i)=>{
     const b=document.createElement("button");
     b.className="tab"+(i===venueIdx?" on":"");
     b.textContent=v.name;
     b.onclick=()=>{venueIdx=i;renderTabs();render();window.scrollTo({top:0});};
     t.appendChild(b);
   });
+  const rb=document.createElement("button");
+  rb.className="tab"+(venueIdx===-1?" on":"");
+  rb.textContent="成績";
+  rb.onclick=()=>{venueIdx=-1;renderTabs();renderResults();window.scrollTo({top:0});};
+  t.appendChild(rb);
+}
+
+let RES=null;
+async function loadResults(){
+  if(RES) return RES;
+  const idx=await (await fetch("results/index.json",{cache:"no-store"})).json();
+  RES=[];
+  for(const d of idx.dates){
+    RES.push(await (await fetch(`results/${d}.json`,{cache:"no-store"})).json());
+  }
+  return RES;
+}
+
+const BETNAMES={tansho:"単勝",umaren:"馬連",sanrenpuku:"三連複",sanrentan:"三連単"};
+const BETKEYS=["tansho","umaren","sanrenpuku","sanrentan"];
+
+async function renderResults(){
+  $("#win5box").style.display="none";
+  const main=$("#main");
+  main.innerHTML=`<div class="loading">結果を読み込み中…</div>`;
+  let res;
+  try{res=await loadResults();}
+  catch(e){main.innerHTML=`<div class="loading">まだ結果データがありません。<br>レース終了後の集計をお待ちください。</div>`;return;}
+  if(!res.length){main.innerHTML=`<div class="loading">まだ結果データがありません。</div>`;return;}
+
+  // 自信度×券種 集計
+  const agg={};
+  ["S","A","B","C"].forEach(c=>{agg[c]={};BETKEYS.forEach(k=>agg[c][k]={hit:0,lose:0});});
+  const tot={};BETKEYS.forEach(k=>tot[k]={hit:0,lose:0,cost:0,ret:0});
+  let raceCount=0;
+  res.forEach(day=>day.races.forEach(r=>{
+    raceCount++;
+    BETKEYS.forEach(k=>{
+      const b=r.bets[k];if(!b||!b.points)return;
+      const c=agg[r.confidence]||agg.B;
+      b.hit?c[k].hit++:c[k].lose++;
+      b.hit?tot[k].hit++:tot[k].lose++;
+      tot[k].cost+=b.points*100;
+      tot[k].ret+=b.payout;
+    });
+  }));
+
+  let html=`<div class="restitle">自信度×券種の勝敗（全${raceCount}レース）</div>
+  <div class="tblwrap"><table class="restbl"><tr><th></th>${BETKEYS.map(k=>`<th>${BETNAMES[k]}</th>`).join("")}</tr>`;
+  ["S","A","B","C"].forEach(c=>{
+    const row=BETKEYS.map(k=>{
+      const a=agg[c][k];
+      if(a.hit+a.lose===0) return "<td>-</td>";
+      return `<td>${a.hit?`<b>${a.hit}勝</b>`:a.hit+"勝"}${a.lose}敗</td>`;
+    }).join("");
+    html+=`<tr><th><span class="conf ${c}" style="display:inline-flex">${c}</span></th>${row}</tr>`;
+  });
+  html+=`<tr class="totrow"><th>回収率</th>${BETKEYS.map(k=>{
+    const t=tot[k];
+    if(!t.cost) return "<td>-</td>";
+    const pct=Math.round(t.ret/t.cost*100);
+    return `<td class="${pct>=100?"plus":""}">${pct}%</td>`;
+  }).join("")}</tr></table></div>
+  <p class="resnote">勝敗は「そのレースの買い目のどれかが的中したか」。回収率は全買い目を100円ずつ買った場合。</p>`;
+
+  // 日別レース結果
+  res.forEach(day=>{
+    const f=fmtDate(day.date);
+    const hits=day.races.filter(r=>BETKEYS.some(k=>r.bets[k]&&r.bets[k].hit)).length;
+    html+=`<div class="restitle">${f.label}(${f.dow}) — 的中 ${hits}/${day.races.length}レース</div>`;
+    day.races.forEach(r=>{
+      const hitList=BETKEYS.filter(k=>r.bets[k]&&r.bets[k].hit)
+        .map(k=>`${BETNAMES[k]}${r.bets[k].payout.toLocaleString()}円`);
+      html+=`<div class="resrace${hitList.length?" hit":""}">
+        <div class="rr1"><span class="rrname">${esc(r.venue)}${r.no}R ${esc(r.name)}</span>
+        <span class="conf ${esc(r.confidence)}" style="width:20px;height:20px;font-size:11px">${esc(r.confidence)}</span></div>
+        <div class="rr2">◎${r.honmei.num} ${esc(r.honmei.name)} ${r.honmei.win?"→ 1着🎯":""}　結果: ${r.top3.map(h=>h.num).join("→")}</div>
+        <div class="rr3">${hitList.length?hitList.join(" / "):"不的中"}</div>
+      </div>`;
+    });
+  });
+  main.innerHTML=html;
 }
 
 const MARKCLS={"◎":"hon","◯":"taikou","○":"taikou","▲":"tan","△":"osae","☆":"tan"};
@@ -267,6 +388,9 @@ const CONFLABEL={"S":"鉄板","A":"有力","B":"混戦","C":"荒れ模様"};
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
 function render(){
+  if(!DATA) return;
+  if(venueIdx<0){renderResults();return;}
+  $("#win5box").style.display="";
   const v=DATA.venues[venueIdx];
   const main=$("#main"); main.innerHTML="";
   main.insertAdjacentHTML("beforeend",`<div class="legend legend-top">
