@@ -167,8 +167,7 @@ summary::-webkit-details-marker{display:none}
 .restbl th,.restbl td{padding:8px 6px;text-align:center;border-bottom:1px solid #22242c}
 .restbl th{color:var(--sub);font-weight:700;font-size:11px}
 .restbl td b{color:var(--accent)}
-.restbl .totrow td{font-family:Oswald,sans-serif;font-size:13px;color:var(--sub)}
-.restbl .totrow td.plus{color:var(--gold);font-weight:600}
+.restbl td.blue{color:#4da3ff;font-weight:700}
 .resnote{font-size:10.5px;color:#5c5f6a;margin:6px 2px 0;line-height:1.6}
 .resrace{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:9px 12px;margin-bottom:8px}
 .resrace.hit{border-color:#5a3a38}
@@ -342,8 +341,7 @@ async function renderResults(){
 
   // 自信度×券種 集計
   const agg={};
-  ["S","A","B","C"].forEach(c=>{agg[c]={};BETKEYS.forEach(k=>agg[c][k]={hit:0,lose:0});});
-  const tot={};BETKEYS.forEach(k=>tot[k]={hit:0,lose:0,cost:0,ret:0});
+  ["S","A","B","C"].forEach(c=>{agg[c]={};BETKEYS.forEach(k=>agg[c][k]={hit:0,lose:0,cost:0,ret:0});});
   let raceCount=0;
   res.forEach(day=>day.races.forEach(r=>{
     raceCount++;
@@ -351,9 +349,8 @@ async function renderResults(){
       const b=r.bets[k];if(!b||!b.points)return;
       const c=agg[r.confidence]||agg.B;
       b.hit?c[k].hit++:c[k].lose++;
-      b.hit?tot[k].hit++:tot[k].lose++;
-      tot[k].cost+=b.points*100;
-      tot[k].ret+=b.payout;
+      c[k].cost+=b.points*100;
+      c[k].ret+=b.payout;
     });
   }));
 
@@ -367,13 +364,24 @@ async function renderResults(){
     }).join("");
     html+=`<tr><th><span class="conf ${c}" style="display:inline-flex">${c}</span></th>${row}</tr>`;
   });
-  html+=`<tr class="totrow"><th>回収率</th>${BETKEYS.map(k=>{
-    const t=tot[k];
-    if(!t.cost) return "<td>-</td>";
-    const pct=Math.round(t.ret/t.cost*100);
-    return `<td class="${pct>=100?"plus":""}">${pct}%</td>`;
-  }).join("")}</tr></table></div>
-  <p class="resnote">勝敗は「そのレースの買い目のどれかが的中したか」。回収率は全買い目を100円ずつ買った場合。</p>`;
+  html+=`</table></div>`;
+
+  // 自信度を絞って買った場合の通算回収率
+  const TIERS=[["Sのみ",["S"]],["S+A",["S","A"]],["S+A+B",["S","A","B"]],["すべて",["S","A","B","C"]]];
+  html+=`<div class="restitle">通算回収率 — 自信度で絞って買った場合</div>
+  <div class="tblwrap"><table class="restbl"><tr><th></th>${BETKEYS.map(k=>`<th>${BETNAMES[k]}</th>`).join("")}</tr>`;
+  TIERS.forEach(([label,confs])=>{
+    const row=BETKEYS.map(k=>{
+      let cost=0,ret=0;
+      confs.forEach(c=>{cost+=agg[c][k].cost;ret+=agg[c][k].ret;});
+      if(!cost) return "<td>-</td>";
+      const pct=Math.round(ret/cost*100);
+      return `<td class="${ret>cost?"blue":""}">${pct}%</td>`;
+    }).join("");
+    html+=`<tr><th>${label}</th>${row}</tr>`;
+  });
+  html+=`</table></div>
+  <p class="resnote">勝敗は「そのレースの買い目のどれかが的中したか」。回収率は該当する自信度のレースの買い目をすべて100円ずつ買った場合の通算。100%超えは青字。</p>`;
 
   // WIN5成績
   const w5days=res.filter(d=>d.win5);
