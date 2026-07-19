@@ -177,6 +177,9 @@ summary::-webkit-details-marker{display:none}
 .rr2{font-size:11.5px;color:var(--sub);margin-top:2px}
 .rr3{font-size:12px;margin-top:3px;color:#5c5f6a}
 .resrace.hit .rr3{color:var(--gold);font-weight:700}
+.rrw5{font-family:Oswald,sans-serif;font-size:17px;font-weight:600;color:var(--sub)}
+.rrw5 small{font-size:11px}
+.rrw5.full{color:var(--gold)}
 
 /* footer */
 footer{padding:26px 16px 10px;text-align:center;color:#5c5f6a;font-size:10.5px;line-height:1.8}
@@ -243,11 +246,24 @@ async function init(){
     buttons.forEach(d=>{
       const f=fmtDate(d);
       const b=document.createElement("button");
-      b.className="datebtn"+(d===date?" on":"");
+      b.className="datebtn"+(d===date&&venueIdx>=0?" on":"");
       b.innerHTML=`${f.label}<span class="dow ${f.cls}">${f.dow}</span>`;
-      b.onclick=()=>{history.replaceState(null,"",`?date=${d}`);init();};
+      b.onclick=()=>{venueIdx=0;history.replaceState(null,"",`?date=${d}`);init();};
       db.appendChild(b);
     });
+    const sb=document.createElement("button");
+    sb.className="datebtn"+(venueIdx<0?" on":"");
+    sb.textContent="成績";
+    sb.onclick=()=>{venueIdx=-1;init();};
+    db.appendChild(sb);
+    if(venueIdx<0){
+      document.querySelector("nav").style.display="none";
+      $("#updated").textContent="";
+      $("#win5box").innerHTML="";
+      renderResults();
+      return;
+    }
+    document.querySelector("nav").style.display="";
     if(!idx.dates.includes(date)){
       // まだ公開されていない日 (当日朝8時の自動更新で公開される)
       DATA=null;
@@ -299,11 +315,6 @@ function renderTabs(){
     b.onclick=()=>{venueIdx=i;renderTabs();render();window.scrollTo({top:0});};
     t.appendChild(b);
   });
-  const rb=document.createElement("button");
-  rb.className="tab"+(venueIdx===-1?" on":"");
-  rb.textContent="成績";
-  rb.onclick=()=>{venueIdx=-1;renderTabs();renderResults();window.scrollTo({top:0});};
-  t.appendChild(rb);
 }
 
 let RES=null;
@@ -363,6 +374,23 @@ async function renderResults(){
     return `<td class="${pct>=100?"plus":""}">${pct}%</td>`;
   }).join("")}</tr></table></div>
   <p class="resnote">勝敗は「そのレースの買い目のどれかが的中したか」。回収率は全買い目を100円ずつ買った場合。</p>`;
+
+  // WIN5成績
+  const w5days=res.filter(d=>d.win5);
+  if(w5days.length){
+    const wins=w5days.filter(d=>d.win5.hits===5).length;
+    html+=`<div class="restitle">WIN5 — ${w5days.length}回挑戦 / ${wins}回的中</div>`;
+    w5days.forEach(day=>{
+      const w=day.win5;
+      const f=fmtDate(day.date);
+      html+=`<div class="resrace${w.hits===5?" hit":""}">
+        <div class="rr1"><span class="rrname">${f.label}(${f.dow})　${w.points}点</span>
+        <span class="rrw5 ${w.hits===5?"full":""}">${w.hits}<small>/5</small></span></div>
+        <div class="rr2">${w.legs.map(l=>`${esc(l.venue)}${l.no}R${l.hit?"○":"✕"}`).join("　")}</div>
+        <div class="rr3">${w.hits===5?"WIN5的中！🎯":`5レース中${w.hits}レース的中…不的中`}</div>
+      </div>`;
+    });
+  }
 
   // 日別レース結果
   res.forEach(day=>{

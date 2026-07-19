@@ -103,7 +103,23 @@ def collect(date):
             })
             print(f"  {v['name']}{r['no']}R 1着:{top3[0]} " +
                   " ".join(k for k, e in races[-1]["bets"].items() if e["hit"]))
-    out = {"date": date, "races": races}
+    # WIN5の答え合わせ (予想にwin5がある日のみ)
+    win5 = None
+    w5 = pred.get("win5")
+    if w5:
+        winners = {r["race_id"]: r["top3"][0]["num"] for r in races}
+        legs = []
+        hits = 0
+        for l in w5["races"]:
+            win = winners.get(l["race_id"])
+            hit = any(p["num"] == win for p in l["picks"])
+            hits += 1 if hit else 0
+            legs.append({"venue": l["venue"], "no": l["no"], "name": l["name"],
+                         "picks": [p["num"] for p in l["picks"]], "winner": win, "hit": hit})
+        win5 = {"legs": legs, "hits": hits, "points": w5.get("points", 0)}
+        print(f"  WIN5: {hits}/5")
+
+    out = {"date": date, "races": races, "win5": win5}
     os.makedirs(os.path.join(BASE, "results"), exist_ok=True)
     with open(os.path.join(BASE, "results", f"{date}.json"), "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, separators=(",", ":"))
