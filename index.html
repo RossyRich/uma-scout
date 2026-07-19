@@ -167,7 +167,7 @@ summary::-webkit-details-marker{display:none}
 .restbl th,.restbl td{padding:8px 6px;text-align:center;border-bottom:1px solid #22242c}
 .restbl th{color:var(--sub);font-weight:700;font-size:11px}
 .restbl td b{color:var(--accent)}
-.restbl td.blue{color:#4da3ff;font-weight:700}
+.blue{color:#4da3ff;font-weight:700}
 .resnote{font-size:10.5px;color:#5c5f6a;margin:6px 2px 0;line-height:1.6}
 .resrace{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:9px 12px;margin-bottom:8px}
 .resrace.hit{border-color:#5a3a38}
@@ -387,7 +387,10 @@ async function renderResults(){
   const w5days=res.filter(d=>d.win5);
   if(w5days.length){
     const wins=w5days.filter(d=>d.win5.hits===5).length;
-    html+=`<div class="restitle">WIN5 — ${w5days.length}回挑戦 / ${wins}回的中</div>`;
+    const w5cost=w5days.reduce((s,d)=>s+d.win5.points*100,0);
+    const w5ret=w5days.reduce((s,d)=>s+(d.win5.payout||0),0);
+    const w5pct=w5cost?Math.round(w5ret/w5cost*100):0;
+    html+=`<div class="restitle">WIN5 — ${w5days.length}回挑戦 / ${wins}回的中 / 回収率<span class="${w5ret>w5cost?"blue":""}" style="font-family:Oswald,sans-serif"> ${w5pct}%</span></div>`;
     w5days.forEach(day=>{
       const w=day.win5;
       const f=fmtDate(day.date);

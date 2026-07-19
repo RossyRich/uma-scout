@@ -116,8 +116,17 @@ def collect(date):
             hits += 1 if hit else 0
             legs.append({"venue": l["venue"], "no": l["no"], "name": l["name"],
                          "picks": [p["num"] for p in l["picks"]], "winner": win, "hit": hit})
-        win5 = {"legs": legs, "hits": hits, "points": w5.get("points", 0)}
-        print(f"  WIN5: {hits}/5")
+        payout = 0
+        if hits == 5:
+            # 的中時はnetkeibaのWIN5ページから払戻金を取得(当日集計前提)
+            try:
+                html = fetch("https://race.netkeiba.com/top/win5.html")
+                m = re.search(r"払戻金?.{0,300}?([\d,]{4,})円", html, re.S)
+                payout = int(m.group(1).replace(",", "")) if m else None
+            except Exception:
+                payout = None
+        win5 = {"legs": legs, "hits": hits, "points": w5.get("points", 0), "payout": payout}
+        print(f"  WIN5: {hits}/5" + (f" 払戻{payout}円" if payout else ""))
 
     out = {"date": date, "races": races, "win5": win5}
     os.makedirs(os.path.join(BASE, "results"), exist_ok=True)
