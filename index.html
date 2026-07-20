@@ -366,6 +366,12 @@ async function renderResults(){
   });
   html+=`</table></div>`;
 
+  // WIN5通算 (回収率表とWIN5セクションで使用)
+  const w5days=res.filter(d=>d.win5);
+  const w5cost=w5days.reduce((s,d)=>s+d.win5.points*100,0);
+  const w5ret=w5days.reduce((s,d)=>s+(d.win5.payout||0),0);
+  const w5pct=w5cost?Math.round(w5ret/w5cost*100):0;
+
   // 自信度を絞って買った場合の通算回収率
   const TIERS=[["Sのみ",["S"]],["S+A",["S","A"]],["S+A+B",["S","A","B"]],["すべて",["S","A","B","C"]]];
   html+=`<div class="restitle">通算回収率 — 自信度で絞って買った場合</div>
@@ -380,17 +386,16 @@ async function renderResults(){
     }).join("");
     html+=`<tr><th>${label}</th>${row}</tr>`;
   });
+  if(w5days.length){
+    html+=`<tr><th>WIN5</th><td colspan="4" class="${w5ret>w5cost?"blue":""}">${w5pct}%</td></tr>`;
+  }
   html+=`</table></div>
   <p class="resnote">勝敗は「そのレースの買い目のどれかが的中したか」。回収率は該当する自信度のレースの買い目をすべて100円ずつ買った場合の通算。100%超えは青字。</p>`;
 
   // WIN5成績
-  const w5days=res.filter(d=>d.win5);
   if(w5days.length){
     const wins=w5days.filter(d=>d.win5.hits===5).length;
-    const w5cost=w5days.reduce((s,d)=>s+d.win5.points*100,0);
-    const w5ret=w5days.reduce((s,d)=>s+(d.win5.payout||0),0);
-    const w5pct=w5cost?Math.round(w5ret/w5cost*100):0;
-    html+=`<div class="restitle">WIN5 — ${w5days.length}回挑戦 / ${wins}回的中 / 回収率<span class="${w5ret>w5cost?"blue":""}" style="font-family:Oswald,sans-serif"> ${w5pct}%</span></div>`;
+    html+=`<div class="restitle">WIN5 — ${w5days.length}回挑戦 / ${wins}回的中</div>`;
     w5days.forEach(day=>{
       const w=day.win5;
       const f=fmtDate(day.date);
