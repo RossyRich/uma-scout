@@ -148,7 +148,7 @@ def parse_race(race_id, html):
         h["rest"] = strip_tags(rest.group(1)) if rest else ""
 
         pasts = []
-        for p in re.findall(r'<td[^>]*class="Past"[^>]*>(.*?)</td>', row, re.S):
+        for p in re.findall(r'<td[^>]*class="Past(?:\s[^"]*)?"[^>]*>(.*?)</td>', row, re.S):
             t = parse_past(p)
             if t:
                 pasts.append(t)
