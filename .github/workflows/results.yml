@@ -3,23 +3,26 @@ name: results
 # 未集計の結果を集計して成績タブとWIN5の答え合わせを更新する。
 # 毎日走らせるが、集計対象がなければ何もしない（平日は即終了）。
 # AI判断を一切使わない純Python処理なので、Macが閉じていても必ず動く。
+#
+# 【GitHubのcron遅延について】
+# スケジュール時刻から3〜4時間遅れて発火するのが常態（実測）。結果集計は
+# 締め切りのある処理ではないので実害はないが、時刻はあてにしないこと。
 on:
   workflow_dispatch:
   schedule:
-    # 09:00 UTC = 18:00 JST（中央競馬の最終レース終了後）
+    # 09:00 UTC = 18:00 JST（遅延を見込むと実際は21〜22時JST着）
     - cron: "0 9 * * *"
 
 permissions:
   contents: write
 
-concurrency:
-  group: uma-scout-write
-  cancel-in-progress: false
-
 jobs:
   results:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    concurrency:
+      group: uma-scout-write
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
 
@@ -30,19 +33,49 @@ jobs:
       - name: 未集計分を集計
         run: python3 results.py --auto
 
+      - name: 生成物を退避
+        run: |
+          mkdir -p staging
+          cp -f results/*.json staging/ 2>/dev/null || true
+          ls -la staging/ || echo "(集計対象なし)"
+
       - name: コミットして push
         run: |
           git config user.name "uma-scout-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add -A results/
-          if git diff --cached --quiet; then
-            echo "集計対象なし"
-            exit 0
-          fi
-          git commit -m "results: $(TZ=Asia/Tokyo date +%Y-%m-%d) 結果集計"
-          for i in 1 2 3; do
-            git pull --rebase --autostash origin main && git push origin main && exit 0
-            echo "push失敗、リトライ $i"
-            sleep 5
+
+          # 毎回リモート最新から作り直すので、Claudeのpushと衝突しない
+          for i in 1 2 3 4 5; do
+            git fetch -q origin main
+            git reset -q --hard origin/main
+
+            mkdir -p results
+            cp -f staging/*.json results/ 2>/dev/null || true
+
+            # リモートに新しい結果が増えていた場合に備えてindexを作り直す
+            python3 - <<'PY'
+          import json, glob, os, re
+          dates = sorted(
+              [os.path.basename(p)[:-5] for p in glob.glob("results/*.json")
+               if re.fullmatch(r"\d{8}", os.path.basename(p)[:-5])],
+              reverse=True,
+          )
+          json.dump({"dates": dates}, open("results/index.json", "w"))
+          PY
+
+            git add -A results/
+            if git diff --cached --quiet; then
+              echo "集計対象なし"
+              exit 0
+            fi
+
+            git commit -q -m "results: $(TZ=Asia/Tokyo date +%Y-%m-%d) 結果集計"
+            if git push -q origin main; then
+              echo "push成功"
+              exit 0
+            fi
+            echo "リモートが進んでいたので作り直して再試行 ($i/5)"
+            sleep $((i * 5))
           done
+          echo "5回試行しても push できませんでした"
           exit 1
