@@ -4,7 +4,7 @@
 # 開催時間外・非開催日は即終了するので、平日に呼ばれても実害はない。
 # AI判断を使わない純Python処理なので、Claudeを起動しなくても動く。
 set -u
-export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+export PATH="$HOME/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
 cd "$(dirname "$0")" || exit 0
 
 # 土日の9〜18時台のみ動く
@@ -22,8 +22,8 @@ python3 results.py --live >/dev/null 2>&1 || exit 0
 # 変化がなければ push しない
 [ -n "$(git status --porcelain -- results/live.json)" ] || exit 0
 
-TOKEN=$(gh auth token --user RossyRich 2>/dev/null) || exit 0
-[ -n "$TOKEN" ] || { echo "$(date '+%F %T') トークン取得失敗"; exit 0; }
+TOKEN=$(gh auth token --user RossyRich 2>>/tmp/umascout-live.log)
+[ -n "$TOKEN" ] || { echo "$(date '+%F %T') gh token取得失敗"; exit 0; }
 export UMA_GH_TOKEN="$TOKEN"
 
 git add results/live.json
