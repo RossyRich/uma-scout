@@ -132,15 +132,20 @@ summary::-webkit-details-marker{display:none}
   padding:4px 0;border-radius:3px;background:var(--panel2);color:var(--sub);
   border:1px solid var(--line);margin-top:1px;
 }
-.bet.main .btype{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btype .bpay{
+  display:block;font-family:Oswald,sans-serif;font-size:10px;font-weight:600;
+  color:var(--gold);letter-spacing:0;margin-top:1px;
+}
 .bpts{display:flex;flex-wrap:wrap;gap:5px;flex:1}
 .pt{
   font-family:Oswald,sans-serif;font-size:13px;font-weight:500;letter-spacing:.05em;
   background:var(--panel2);border:1px solid var(--line);
   padding:2px 8px;border-radius:3px;
 }
-.bet.main .pt{border-color:#5a3a38;background:#241a19}
-.axis{font-size:10px;color:var(--accent);font-weight:700;letter-spacing:.2em;margin-left:4px}
+.pt.pthit{
+  background:var(--gold);border-color:var(--gold);color:#1a1710;font-weight:600;
+  box-shadow:0 0 0 2px rgba(217,180,91,.25);
+}
 
 /* WIN5 */
 .win5{
@@ -525,12 +530,25 @@ function render(){
     const resLine=res?`<div class="rres${hitBets.length?" hit":""}">結果 ${res.top3.map(x=>x.num).join("→")} · ${
       hitBets.length?hitBets.map(k=>`${BETNAMES[k]}${res.bets[k].payout.toLocaleString()}円`).join(" / "):"不的中"}</div>`:"";
     const B=r.bets||{};
-    const betRow=(label,key,main)=>{
+    const top=res?res.top3.map(x=>x.num):null;
+    // 確定後、実際に当たった買い目だけを光らせる
+    const isHit=(key,p)=>{
+      if(!top||!res.bets[key]||!res.bets[key].hit) return false;
+      const nums=(String(p).match(/\d+/g)||[]).map(Number);
+      if(new Set(nums).size!==nums.length) return false;
+      if(key==="tansho") return nums.length===1&&nums[0]===top[0];
+      if(key==="umaren") return nums.length===2&&nums.every(n=>top.slice(0,2).includes(n));
+      if(key==="sanrenpuku") return nums.length===3&&nums.every(n=>top.includes(n));
+      if(key==="sanrentan") return nums.length===3&&nums.every((n,i)=>n===top[i]);
+      return false;
+    };
+    const betRow=(label,key)=>{
       const pts=B[key]||[];
       if(!pts.length) return "";
-      return `<div class="bet${main?" main":""}">
-        <span class="btype">${label}${main?'<span class="axis">主軸</span>':""}</span>
-        <div class="bpts">${pts.map(p=>`<span class="pt">${esc(p)}</span>`).join("")}</div>
+      const paid=(res&&res.bets[key]&&res.bets[key].hit)?res.bets[key].payout:0;
+      return `<div class="bet">
+        <span class="btype">${label}${paid?`<span class="bpay">${paid.toLocaleString()}円</span>`:""}</span>
+        <div class="bpts">${pts.map(p=>`<span class="pt${isHit(key,p)?" pthit":""}">${esc(p)}</span>`).join("")}</div>
       </div>`;
     };
     d.innerHTML=`
@@ -548,10 +566,10 @@ function render(){
         ${marksHtml}
         <div class="rsummary">${esc(r.summary||"")}</div>
         <div class="bets">
-          ${betRow("単勝","tansho",false)}
-          ${betRow("馬連","umaren",true)}
-          ${betRow("三連複","sanrenpuku",false)}
-          ${betRow("三連単","sanrentan",false)}
+          ${betRow("単勝","tansho")}
+          ${betRow("馬連","umaren")}
+          ${betRow("三連複","sanrenpuku")}
+          ${betRow("三連単","sanrentan")}
         </div>
       </div>`;
     main.appendChild(d);
