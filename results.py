@@ -27,6 +27,7 @@ JST = timezone(timedelta(hours=9))
 BET_TYPES = {
     "tansho": ("Tansho", 1, False),
     "umaren": ("Umaren", 2, False),
+    "wide": ("Wide", 2, False),
     "sanrenpuku": ("Fuku3", 3, False),
     "sanrentan": ("Tan3", 3, True),
 }
