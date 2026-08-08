@@ -29,16 +29,17 @@ body{
 
 /* ── header ── */
 header{padding:20px 16px 0 16px}
-.headtop{display:flex;align-items:center;justify-content:space-between;gap:10px}
-.headlinks{display:flex;gap:6px;flex-shrink:0}
-.ipat,.live{
+.headtop{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.headlinks{display:flex;gap:6px;flex-shrink:0;margin-left:auto;margin-top:2px}
+.ipat,.live,.replay{
   display:inline-flex;align-items:center;gap:4px;
   border:1px solid #3f4250;background:var(--panel);color:var(--text);
   padding:7px 11px;border-radius:4px;font-size:12px;font-weight:700;
   text-decoration:none;letter-spacing:.03em;white-space:nowrap;
 }
 .ipat span{font-size:10px;color:var(--sub)}
-.ipat:active,.live:active{background:var(--panel2)}
+.ipat:active,.live:active,.replay:active{background:var(--panel2)}
+.replay{color:#c9c7c1}
 .live{border-color:#5a3a38}
 .live i{
   width:7px;height:7px;border-radius:50%;background:var(--accent);
@@ -250,6 +251,7 @@ footer{padding:26px 16px 10px;text-align:center;color:#5c5f6a;font-size:10.5px;l
     </div>
     <div class="headlinks">
       <a class="live" href="https://sp.gch.jp/jra" target="_blank" rel="noopener"><i></i>ライブ</a>
+      <a class="replay" href="https://www.jra.go.jp/keiba/" target="_blank" rel="noopener">▶ リプレイ</a>
       <a class="ipat" href="https://www.ipat.jra.go.jp/sp/" target="_blank" rel="noopener">即PAT<span>↗</span></a>
     </div>
   </div>
