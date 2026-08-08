@@ -67,3 +67,20 @@
 - `confidence`: S(鉄板) / A(有力) / B(混戦) / C(荒れ模様)
 - 買い目の数字はすべて馬番
 - 全レース分を必ず出力（12R開催なら12レース）
+
+## 開催中の途中経過（自動）
+
+レースが確定するたびに予想画面へ結果を出すため、`results/live.json` を開催中に更新している。
+
+- 更新役: Mac の launchd ジョブ `com.rossyrich.umascout.live`（15分おき / 土日9〜18時台のみ動作）
+  - 実体は `live_update.sh` → `python3 results.py --live` → live.json を commit & push
+  - 設定ファイル: `~/Library/LaunchAgents/com.rossyrich.umascout.live.plist`
+  - ログ: `/tmp/umascout-live.log`
+  - Macが起動していない間は更新されない（その日の最終結果は夜のGitHub Actionsが必ず拾う）
+- `results.py --live` は発走時刻を過ぎた未取得レースだけを問い合わせるので数秒で終わる
+- 確定版 `results/YYYYMMDD.json` ができた日は live.json を見に行かない（画面は確定版を優先）
+
+手動で今すぐ反映したいときは:
+```
+python3 results.py --live && git add results/live.json && git commit -m "live" && git push
+```
