@@ -68,7 +68,7 @@ details.race{
 }
 details.race[open]{border-color:#3a3d49}
 summary{
-  list-style:none;display:flex;align-items:center;gap:10px;
+  list-style:none;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
   padding:12px 14px;cursor:pointer;-webkit-tap-highlight-color:transparent;
 }
 summary::-webkit-details-marker{display:none}
@@ -158,6 +158,33 @@ summary::-webkit-details-marker{display:none}
 .w5leg .lrace b{font-size:12.5px}
 .w5leg .lrace span{color:var(--sub);font-size:10.5px;display:block}
 .w5leg .lpicks{display:flex;gap:4px;flex-shrink:0}
+
+/* 当日の結果表示 */
+.daysum{
+  display:flex;align-items:center;gap:6px;
+  background:var(--panel2);border:1px solid var(--line);border-radius:6px;
+  padding:8px 12px;margin-bottom:10px;font-size:12.5px;color:var(--sub);
+}
+.daysum b{color:var(--text);font-family:Oswald,sans-serif;font-size:15px;font-weight:600}
+.daysum b.gold{color:var(--gold)}
+.dsupd{margin-left:auto;font-size:10.5px;color:#5c5f6a}
+.rres{
+  flex-basis:100%;font-size:11px;color:var(--sub);line-height:1.4;
+  margin-top:7px;padding-top:6px;border-top:1px dashed #24262e;
+}
+.rres.hit{color:var(--gold);font-weight:700}
+details.race.hit{border-color:#5a3a38}
+details.race.done .rname{color:#b8b6b0}
+.rank{
+  font-family:Oswald,sans-serif;font-size:10px;font-weight:600;
+  padding:1px 5px;border-radius:2px;margin-left:6px;
+}
+.rank.r1{background:var(--gold);color:#1a1710}
+.rank.r2{background:#3a4256;color:#dfe3ea}
+.rank.r3{background:#2f3542;color:#b9bfcc}
+.w5st{font-size:14px;font-weight:700;margin-left:5px;align-self:center}
+.w5st.ok{color:var(--gold)}
+.w5st.ng{color:#5c5f6a}
 
 /* 成績 */
 .restitle{font-weight:700;font-size:13px;color:var(--text);margin:18px 2px 8px;letter-spacing:.05em}
@@ -274,6 +301,7 @@ async function init(){
       return;
     }
     DATA=await (await fetch(`predictions/${date}.json`,{cache:"no-store"})).json();
+    await loadDayResults(date);
     $("#updated").textContent=`${DATA.updated} 更新`;
     renderWin5();
     renderTabs();
@@ -283,21 +311,42 @@ async function init(){
   }
 }
 
+// 当日の確定結果 (確定版 results/DATE.json、なければ途中経過 results/live.json)
+let DAYRES=null, RESMAP={};
+async function loadDayResults(date){
+  DAYRES=null; RESMAP={};
+  for(const url of [`results/${date}.json`,"results/live.json"]){
+    try{
+      const r=await fetch(url,{cache:"no-store"});
+      if(!r.ok) continue;
+      const j=await r.json();
+      if(j.date!==date) continue;
+      DAYRES=j;
+      (j.races||[]).forEach(x=>RESMAP[x.race_id]=x);
+      break;
+    }catch(e){}
+  }
+}
+
 function renderWin5(){
   const box=$("#win5box"); box.innerHTML="";
   const w=DATA.win5;
   if(!w) return;
+  const w5res=(DAYRES&&DAYRES.win5)?DAYRES.win5:null;
   const wakuOf=(rid,num)=>{
     for(const v of DATA.venues) for(const r of v.races)
       if(r.race_id===rid){const h=(r.horses||[]).find(h=>h.num===num);return h?h.waku:1;}
     return 1;
   };
-  const legs=w.races.map((l,i)=>`
+  const legs=w.races.map((l,i)=>{
+    const st=w5res?w5res.legs[i]:null;
+    const stHtml=(!st||st.pending)?"":(st.hit?'<span class="w5st ok">○</span>':'<span class="w5st ng">✕</span>');
+    return `
     <div class="w5leg">
       <span class="lno">${i+1}</span>
       <div class="lrace"><b>${esc(l.venue)}${l.no}R ${esc(l.name)}</b><span>${esc(l.time)}発走 / 自信度${esc(l.confidence)}</span></div>
-      <div class="lpicks">${l.picks.map(p=>`<span class="num w${wakuOf(l.race_id,p.num)}" title="${esc(p.name)}">${p.num}</span>`).join("")}</div>
-    </div>`).join("");
+      <div class="lpicks">${l.picks.map(p=>`<span class="num w${wakuOf(l.race_id,p.num)}" title="${esc(p.name)}">${p.num}</span>`).join("")}${stHtml}</div>
+    </div>`;}).join("");
   box.innerHTML=`<div class="win5">
     <div class="w5head"><span class="w5title">WIN5</span><span class="w5pts">フォーメーション <b>${w.points}</b> 点</span></div>
     ${legs}
@@ -444,22 +493,37 @@ function render(){
     <span><i class="conf B">B</i>混戦</span>
     <span><i class="conf C">C</i>荒れ模様</span>
   </div>`);
+  // 当日の途中経過サマリー
+  const doneRaces=Object.values(RESMAP);
+  if(doneRaces.length){
+    const hitN=doneRaces.filter(x=>BETKEYS.some(k=>x.bets[k]&&x.bets[k].hit)).length;
+    main.insertAdjacentHTML("beforeend",`<div class="daysum">
+      本日ここまで <b>${doneRaces.length}</b>R終了 / 的中 <b class="${hitN?"gold":""}">${hitN}</b>R
+      ${DAYRES&&DAYRES.updated?`<span class="dsupd">${esc(DAYRES.updated)} 時点</span>`:""}
+    </div>`);
+  }
   v.races.forEach(r=>{
     const hmap={}; (r.horses||[]).forEach(h=>hmap[h.num]=h);
     const hon=(r.marks||[])[0];
+    const res=RESMAP[r.race_id];
+    const hitBets=res?BETKEYS.filter(k=>res.bets[k]&&res.bets[k].hit):[];
     const d=document.createElement("details");
-    d.className="race";
+    d.className="race"+(res?" done":"")+(hitBets.length?" hit":"");
     const marksHtml=(r.marks||[]).map(m=>{
       const h=hmap[m.num]||{};
       const oddsHtml=h.odds?`<div class="odds"><b>${h.odds}</b>${h.pop?h.pop+"人気":""}</div>`:"";
+      const rank=res?res.top3.findIndex(x=>x.num===m.num):-1;
+      const rankHtml=rank>=0?`<span class="rank r${rank+1}">${rank+1}着</span>`:"";
       return `<div class="mk">
         <span class="mark ${MARKCLS[m.mark]||"osae"}">${esc(m.mark)}</span>
         <span class="num w${h.waku||1}">${m.num}</span>
         <div class="info">
-          <div class="hname">${esc(m.name)}<span style="color:var(--sub);font-size:11px;font-weight:400"> ${esc(h.jockey||"")}</span></div>
+          <div class="hname">${esc(m.name)}${rankHtml}<span style="color:var(--sub);font-size:11px;font-weight:400"> ${esc(h.jockey||"")}</span></div>
           <div class="hcmt">${esc(m.comment||"")}</div>
         </div>${oddsHtml}</div>`;
     }).join("");
+    const resLine=res?`<div class="rres${hitBets.length?" hit":""}">結果 ${res.top3.map(x=>x.num).join("→")} · ${
+      hitBets.length?hitBets.map(k=>`${BETNAMES[k]}${res.bets[k].payout.toLocaleString()}円`).join(" / "):"不的中"}</div>`:"";
     const B=r.bets||{};
     const betRow=(label,key,main)=>{
       const pts=B[key]||[];
@@ -478,6 +542,7 @@ function render(){
         </div>
         <div class="rpick"><span class="m">◎</span><span class="n">${esc(hon?hon.name:"")}</span></div>
         <span class="conf ${esc(r.confidence||"B")}">${esc(r.confidence||"B")}</span>
+        ${resLine}
       </summary>
       <div class="body">
         ${marksHtml}

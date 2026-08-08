@@ -8,6 +8,7 @@ netkeibaの結果ページから着順・払戻を取得し、predictions/YYYYMM
 使い方:
   python3 results.py 20260718   # 指定日を集計
   python3 results.py --auto     # 未集計の過去日をまとめて集計(当日は17時以降のみ)
+  python3 results.py --live     # 当日の途中経過を results/live.json に書き出す
 """
 import sys
 import os
@@ -72,19 +73,49 @@ def judge(bets, payouts):
     return res
 
 
-def collect(date):
+def collect(date, live=False):
+    """live=True なら確定済みのレースだけを results/live.json に書き出す(途中経過)"""
     pred_path = os.path.join(BASE, "predictions", f"{date}.json")
     if not os.path.exists(pred_path):
         print(f"予想なし: {date}")
         return False
     pred = json.load(open(pred_path, encoding="utf-8"))
+
+    # 途中経過モードでは、既に取得済みのレースを再取得しない(netkeibaへの負荷軽減)
+    cached = {}
+    if live:
+        live_path = os.path.join(BASE, "results", "live.json")
+        if os.path.exists(live_path):
+            prev = json.load(open(live_path, encoding="utf-8"))
+            if prev.get("date") == date:
+                cached = {r["race_id"]: r for r in prev.get("races", [])}
+        now_hm = datetime.now(JST).strftime("%H:%M")
+
     races = []
+    pending = 0
     for v in pred["venues"]:
         for r in v["races"]:
-            html = fetch(f"https://race.netkeiba.com/race/result.html?race_id={r['race_id']}")
+            if live:
+                if r["race_id"] in cached:
+                    races.append(cached[r["race_id"]])
+                    continue
+                # 発走時刻を過ぎていないレースは問い合わせない
+                if r.get("time") and r["time"] > now_hm:
+                    pending += 1
+                    continue
+            try:
+                html = fetch(f"https://race.netkeiba.com/race/result.html?race_id={r['race_id']}")
+            except Exception as e:
+                if live:
+                    pending += 1
+                    continue
+                raise
             time.sleep(0.4)
             payouts = parse_payouts(html)
             if "sanrentan" not in payouts:
+                if live:
+                    pending += 1
+                    continue
                 print(f"  結果未確定: {v['name']}{r['no']}R → この日はスキップ")
                 return False
             top3 = payouts["sanrentan"][0][0]
@@ -115,7 +146,8 @@ def collect(date):
             hit = any(p["num"] == win for p in l["picks"])
             hits += 1 if hit else 0
             legs.append({"venue": l["venue"], "no": l["no"], "name": l["name"],
-                         "picks": [p["num"] for p in l["picks"]], "winner": win, "hit": hit})
+                         "picks": [p["num"] for p in l["picks"]], "winner": win,
+                         "hit": hit, "pending": win is None})
         payout = 0
         if hits == 5:
             # 的中時はnetkeibaのWIN5ページから払戻金を取得(当日集計前提)
@@ -130,6 +162,15 @@ def collect(date):
 
     out = {"date": date, "races": races, "win5": win5}
     os.makedirs(os.path.join(BASE, "results"), exist_ok=True)
+
+    if live:
+        out["updated"] = datetime.now(JST).strftime("%H:%M")
+        out["pending"] = pending
+        with open(os.path.join(BASE, "results", "live.json"), "w", encoding="utf-8") as f:
+            json.dump(out, f, ensure_ascii=False, separators=(",", ":"))
+        print(f"途中経過: 確定{len(races)}レース / 残り{pending}レース")
+        return True
+
     with open(os.path.join(BASE, "results", f"{date}.json"), "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, separators=(",", ":"))
     dates = sorted(
@@ -144,7 +185,14 @@ def collect(date):
 
 
 def main():
-    if "--auto" in sys.argv:
+    if "--live" in sys.argv:
+        # 当日の途中経過を results/live.json に書き出す(開催時間中に繰り返し実行)
+        date = datetime.now(JST).strftime("%Y%m%d")
+        if os.path.exists(os.path.join(BASE, "results", f"{date}.json")):
+            print("確定済みのため途中経過は不要")
+            return
+        collect(date, live=True)
+    elif "--auto" in sys.argv:
         now = datetime.now(JST)
         today = now.strftime("%Y%m%d")
         done = False
