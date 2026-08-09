@@ -26,6 +26,20 @@ WIN5_PICKS = {"S": 1, "A": 2, "B": 2, "C": 3}
 WIN5_MAX_POINTS = 50
 
 
+def _combo(nums):
+    """着順を問わない式別（馬連・ワイド・三連複）の組を作る。
+
+    実際の投票表記に合わせて必ず馬番の小さい順に並べる。確率順のまま出すと
+    「2-1-3」のような並びになり、投票画面と見比べにくいため。
+    """
+    return "-".join(str(x) for x in sorted(nums))
+
+
+def _nums(nums):
+    """BOX・流しの対象馬を小さい順に「1・2・3」形式で並べる"""
+    return "・".join(str(x) for x in sorted(nums))
+
+
 def derive(p):
     """AIが出した各馬の確率(p_win/p_top3)から、印と式別ごとの買い目を機械的に組む。
 
@@ -35,7 +49,7 @@ def derive(p):
     """
     hs = [dict(h) for h in p.get("horses", []) if h.get("num")]
     if not hs:
-        return p.get("marks", []), p.get("bets", {}), None
+        return p.get("marks", []), p.get("bets", {}), p.get("formations", {}), None
 
     for h in hs:
         h["p_win"] = max(0.0, float(h.get("p_win", 0)))
@@ -46,7 +60,7 @@ def derive(p):
     T = [h["num"] for h in by_top3]
     W = [h["num"] for h in by_win]
     if len(T) < 3:
-        return p.get("marks", []), p.get("bets", {}), None
+        return p.get("marks", []), p.get("bets", {}), p.get("formations", {}), None
 
     marks = [{"mark": MARK_CHARS[i], "num": h["num"], "name": h.get("name", ""),
               "comment": h.get("comment", ""),
@@ -54,18 +68,44 @@ def derive(p):
              for i, h in enumerate(by_top3[:5])]
 
     rest = [n for n in T if n != W[0]][:3]
+    umaren_partners = T[1:4]      # 馬連は T[0] を軸にした流し
+    wide_box = T[:3]              # ワイドは3頭BOX
+    sanpuku_box = T[:4]           # 三連複は4頭BOX
+
+    # 一覧そのものも馬番順に並べる。組の中だけ昇順にしても、一覧が確率順のままだと
+    # 「2-7, 7-11, 4-7」のように散らばって投票画面と突き合わせにくいため。
+    def _sorted_combos(combos):
+        return [_combo(c) for c in sorted(sorted(c) for c in combos)]
+
     bets = {
         "tansho": [str(W[0])],
-        "umaren": [f"{T[0]}-{n}" for n in T[1:4]],
-        "wide": ["-".join(str(x) for x in c) for c in combinations(T[:3], 2)],
-        "sanrenpuku": ["-".join(str(x) for x in c) for c in combinations(T[:4], 3)],
-        "sanrentan": [f"{W[0]}→{a}→{b}" for a, b in permutations(rest, 2)],
+        "umaren": _sorted_combos([T[0], n] for n in umaren_partners),
+        "wide": _sorted_combos(combinations(wide_box, 2)),
+        "sanrenpuku": _sorted_combos(combinations(sanpuku_box, 3)),
+        # 三連単は着順を問うので組の中は並べ替えない。1着は固定なので
+        # 2着・3着の馬番順に並べて一覧だけ見やすくする。
+        "sanrentan": [f"{W[0]}→{a}→{b}"
+                      for a, b in sorted(permutations(rest, 2))],
     }
+
+    # 実際に投票するときの入力方法。買い目の一覧より前に表示する。
+    # BOXや流しで一括入力できる形にしておくと、1点ずつ入れる必要がなくなる。
+    formations = {
+        "tansho": f"{W[0]}（1点）",
+        "umaren": f"{T[0]} → {_nums(umaren_partners)}"
+                  f"（軸1頭ながし・{len(bets['umaren'])}点）",
+        "wide": f"{_nums(wide_box)}（{len(wide_box)}頭BOX・{len(bets['wide'])}点）",
+        "sanrenpuku": f"{_nums(sanpuku_box)}"
+                      f"（{len(sanpuku_box)}頭BOX・{len(bets['sanrenpuku'])}点）",
+        "sanrentan": f"{W[0]} → {_nums(rest)} → {_nums(rest)}"
+                     f"（1着固定・{len(bets['sanrentan'])}点）",
+    }
+
     warn = None
     total_win = sum(h["p_win"] for h in hs)
     if total_win > 100:
         warn = f"勝率の合計が{total_win:.0f}%"
-    return marks, bets, warn
+    return marks, bets, formations, warn
 
 
 def win5_race_ids_from_netkeiba(date):
@@ -145,6 +185,34 @@ def add_win5(out):
 def main():
     date = sys.argv[1]
 
+    # --rebuild-bets: 公開済みの予想ファイルの買い目と投票方法だけを組み直す。
+    # 印(marks)に各馬の p_win / p_top3 が入っているので、予想そのものは変えずに
+    # 買い目の並びや表示形式の変更を既存分へ反映できる。
+    if "--rebuild-bets" in sys.argv:
+        path = os.path.join(BASE, "predictions", f"{date}.json")
+        with open(path, encoding="utf-8") as f:
+            out = json.load(f)
+        n = 0
+        for v in out.get("venues", []):
+            for r in v.get("races", []):
+                ms = [m for m in r.get("marks", []) if m.get("p_top3") is not None]
+                if len(ms) < 3:
+                    continue
+                marks, bets, formations, _ = derive({"horses": [
+                    {"num": m["num"], "name": m.get("name", ""),
+                     "p_win": m.get("p_win", 0), "p_top3": m.get("p_top3", 0)}
+                    for m in ms
+                ]})
+                if not bets:
+                    continue
+                r["bets"] = bets
+                r["formations"] = formations
+                n += 1
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(out, f, ensure_ascii=False, separators=(",", ":"))
+        print(f"買い目を組み直しました: {path} ({n}レース)")
+        return
+
     # --win5-only: 既存の予想ファイルにWIN5だけ追加し直す
     if "--win5-only" in sys.argv:
         path = os.path.join(BASE, "predictions", f"{date}.json")
@@ -186,7 +254,7 @@ def main():
             if not p:
                 missing.append(r["race_id"])
                 continue
-            marks, bets, warn = derive(p)
+            marks, bets, formations, warn = derive(p)
             if warn:
                 warnings.append(f"{v['name']}{r['no']}R: {warn}")
             if not marks:
@@ -208,6 +276,7 @@ def main():
                 "summary": p.get("summary", ""),
                 "confidence": p.get("confidence", "B"),
                 "bets": bets,
+                "formations": formations,
             })
         out["venues"].append({"name": v["name"], "races": races})
 

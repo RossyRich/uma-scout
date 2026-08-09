@@ -155,6 +155,13 @@ summary::-webkit-details-marker{display:none}
   display:block;font-family:Oswald,sans-serif;font-size:10px;font-weight:600;
   color:var(--gold);letter-spacing:0;margin-top:1px;
 }
+.bcol{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+/* 投票時の入力方法（BOX・流し）。買い目一覧より前に置く */
+.bform{
+  font-size:12px;font-weight:700;color:var(--text);letter-spacing:.02em;
+  background:#20222a;border:1px solid #333743;border-left:3px solid var(--accent);
+  padding:4px 8px;border-radius:0 3px 3px 0;
+}
 .bpts{display:flex;flex-wrap:wrap;gap:5px;flex:1}
 .pt{
   font-family:Oswald,sans-serif;font-size:13px;font-weight:500;letter-spacing:.05em;
@@ -254,7 +261,10 @@ footer{padding:26px 16px 10px;text-align:center;color:#5c5f6a;font-size:10.5px;l
     <div class="headlinks">
       <a class="live" href="https://sp.gch.jp/jra" target="_blank" rel="noopener"><i></i>ライブ</a>
       <a class="replay" href="https://www.jra.go.jp/keiba/" target="_blank" rel="noopener">▶ リプレイ</a>
-      <a class="ipat" href="https://www.ipat.jra.go.jp/sp/" target="_blank" rel="noopener">即PAT<span>↗</span></a>
+      <!-- ホーム画面から起動(PWA)しているとアプリ内ビューで開いてログインが通りにくいため、
+           必ず既定のブラウザ側で開かせる。rel="external noreferrer" がその指示になる。 -->
+      <a class="ipat" id="ipatLink" href="https://www.ipat.jra.go.jp/sp/"
+         target="_blank" rel="external noopener noreferrer">即PAT<span>↗</span></a>
     </div>
   </div>
   <div class="dateline">
@@ -570,13 +580,19 @@ function render(){
       if(key==="sanrentan") return nums.length===3&&nums.every((n,i)=>n===top[i]);
       return false;
     };
+    const F=r.formations||{};
     const betRow=(label,key)=>{
       const pts=B[key]||[];
       if(!pts.length) return "";
       const paid=(res&&res.bets[key]&&res.bets[key].hit)?res.bets[key].payout:0;
+      // 投票時の入力方法(BOX・流し)を先に出し、その下に実際の買い目を並べる
+      const form=F[key]?`<div class="bform">${esc(F[key])}</div>`:"";
       return `<div class="bet">
         <span class="btype">${label}${paid?`<span class="bpay">${paid.toLocaleString()}円</span>`:""}</span>
-        <div class="bpts">${pts.map(p=>`<span class="pt${isHit(key,p)?" pthit":""}">${esc(p)}</span>`).join("")}</div>
+        <div class="bcol">
+          ${form}
+          <div class="bpts">${pts.map(p=>`<span class="pt${isHit(key,p)?" pthit":""}">${esc(p)}</span>`).join("")}</div>
+        </div>
       </div>`;
     };
     d.innerHTML=`
