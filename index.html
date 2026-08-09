@@ -621,6 +621,34 @@ function render(){
   });
 }
 init();
+
+/* 即PATを既定ブラウザ(Safari)で開く。
+   ホーム画面から起動したPWAでは、外部リンクがアプリ内ビューで開いてしまう。
+   このビューはSafariとCookieや自動入力を共有しないため、毎回ログインし直しになる。
+   iOSにはPWAから外部ブラウザを開く公式APIが無いので、Safari起動用スキーム
+   (x-safari-https:) を試し、反応が無ければ従来どおり別タブで開く。
+   ※このスキームはiOSのバージョンによっては効かない（iOS 16では不可との報告あり）。 */
+(function(){
+  const a=document.getElementById("ipatLink");
+  if(!a) return;
+  const standalone = window.navigator.standalone===true ||
+                     window.matchMedia("(display-mode: standalone)").matches;
+  if(!standalone) return;           // 通常のブラウザなら target="_blank" のままでよい
+  a.addEventListener("click",function(e){
+    e.preventDefault();
+    const url=a.href;
+    let left=false;
+    const onLeave=()=>{left=true;};  // Safariに切り替われば画面が隠れる
+    document.addEventListener("visibilitychange",onLeave,{once:true});
+    window.addEventListener("pagehide",onLeave,{once:true});
+    window.location.href=url.replace(/^https:/,"x-safari-https:");
+    setTimeout(function(){
+      document.removeEventListener("visibilitychange",onLeave);
+      window.removeEventListener("pagehide",onLeave);
+      if(!left) window.open(url,"_blank","noopener");  // 起動しなかった場合の保険
+    },800);
+  });
+})();
 </script>
 </body>
 </html>
