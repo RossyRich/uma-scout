@@ -41,6 +41,9 @@ header{padding:20px 16px 0 16px}
 .ipat:active,.live:active,.replay:active{background:var(--panel2)}
 .replay{color:#c9c7c1}
 .live{border-color:#5a3a38}
+/* 開催時間外は赤点の点滅を止め、ただのリンクとして見せる */
+.live.off{border-color:#3f4250}
+.live.off i{background:#5c5f6a;animation:none}
 .live i{
   width:7px;height:7px;border-radius:50%;background:var(--accent);
   display:inline-block;animation:blink 1.6s ease-in-out infinite;
@@ -259,7 +262,7 @@ footer{padding:26px 16px 10px;text-align:center;color:#5c5f6a;font-size:10.5px;l
       <span class="en">AI Keiba Predictions</span>
     </div>
     <div class="headlinks">
-      <a class="live" href="https://sp.gch.jp/jra" target="_blank" rel="noopener"><i></i>ライブ</a>
+      <a class="live off" href="https://sp.gch.jp/jra" target="_blank" rel="noopener"><i></i>ライブ</a>
       <a class="replay" href="https://www.jra.go.jp/keiba/" target="_blank" rel="noopener">▶ リプレイ</a>
       <!-- ホーム画面から起動(PWA)しているとアプリ内ビューで開いてログインが通りにくいため、
            必ず既定のブラウザ側で開かせる。rel="external noreferrer" がその指示になる。 -->
@@ -328,6 +331,7 @@ async function init(){
       $("#updated").textContent="";
       $("#win5box").innerHTML="";
       renderResults();
+      updateLiveBadge();
       return;
     }
     document.querySelector("nav").style.display="";
@@ -339,6 +343,7 @@ async function init(){
       renderTabs();
       const f=fmtDate(date);
       $("#main").innerHTML=`<div class="loading">${f.label}(${f.dow})の予想は、<br>当日の朝8時ごろに公開されます。<br><br>公開までしばらくお待ちください🐴</div>`;
+      updateLiveBadge();
       return;
     }
     DATA=await (await fetch(`predictions/${date}.json`,{cache:"no-store"})).json();
@@ -347,9 +352,39 @@ async function init(){
     renderWin5();
     renderTabs();
     render();
+    updateLiveBadge();
   }catch(e){
     $("#main").innerHTML=`<div class="loading">データを読み込めませんでした。<br>まだ今週の予想が生成されていない可能性があります。</div>`;
   }
+}
+
+/* ライブボタンの赤点を、実際にレースが行われている時間帯だけ点滅させる。
+   判定材料は予想データが持つ各レースの発走時刻。開催のない日や、初レース前・
+   最終レース後は点滅を止めてただのリンクにする。 */
+function isRaceDayLive(){
+  if(!DATA || DATA.date!==jstDate(0)) return false;   // 別の日を見ているときは消灯
+  const mins=[];
+  (DATA.venues||[]).forEach(v=>(v.races||[]).forEach(r=>{
+    const m=/^(\d{1,2}):(\d{2})$/.exec(r.time||"");
+    if(m) mins.push(+m[1]*60 + +m[2]);
+  }));
+  if(!mins.length) return false;                      // 開催なし
+  const jst=new Date(Date.now()+9*3600*1000);
+  const now=jst.getUTCHours()*60+jst.getUTCMinutes();
+  // 初レースの15分前からパドック中継が始まるので少し早めに点け、最終レース後は30分で消す
+  if(now < Math.min(...mins)-15 || now > Math.max(...mins)+30) return false;
+  // 全レースの結果が出揃っていればその日は終了
+  const total=(DATA.venues||[]).reduce((n,v)=>n+(v.races||[]).length,0);
+  if(total && Object.keys(RESMAP).length>=total) return false;
+  return true;
+}
+
+function updateLiveBadge(){
+  const el=document.querySelector(".live");
+  if(!el) return;
+  const live=isRaceDayLive();
+  el.classList.toggle("off",!live);
+  el.title=live?"レース中継を見る":"本日の開催は終了しています";
 }
 
 // 当日の確定結果 (確定版 results/DATE.json、なければ途中経過 results/live.json)
@@ -621,6 +656,8 @@ function render(){
   });
 }
 init();
+// 画面を開いたままでも開催終了で消灯するよう、1分ごとに見直す
+setInterval(updateLiveBadge, 60000);
 
 /* 即PATをSafariで開く。
    ホーム画面から起動したPWAでは、外部リンクがアプリ内ビューで開いてしまう。
