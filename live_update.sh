@@ -7,6 +7,13 @@ set -u
 export PATH="$HOME/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
 cd "$(dirname "$0")" || exit 0
 
+# 自滅タイマー。どこかで固まっても10分で必ず終了する。
+# launchdは前回の実行が終わるまで次を起動しないので、これが無いと
+# 1回のハングで以降の更新が永久に止まる(2026-08-16に3時間停止した)。
+( sleep 600; kill -9 $$ 2>/dev/null ) &
+WATCHDOG=$!
+trap 'kill "$WATCHDOG" 2>/dev/null' EXIT
+
 # 土日の9〜18時台のみ動く
 DOW=$(date +%u)
 HOUR=$(date +%H)
@@ -22,7 +29,8 @@ python3 results.py --live >/dev/null 2>&1 || exit 0
 # 変化がなければ push しない
 [ -n "$(git status --porcelain -- results/live.json)" ] || exit 0
 
-TOKEN=$(gh auth token --user RossyRich 2>>/tmp/umascout-live.log)
+# gh は30秒で打ち切る(alarmはexec後も維持される)。ハングしても居座らせない。
+TOKEN=$(perl -e 'alarm 30; exec @ARGV' gh auth token --user RossyRich 2>>/tmp/umascout-live.log)
 [ -n "$TOKEN" ] || { echo "$(date '+%F %T') gh token取得失敗"; exit 0; }
 export UMA_GH_TOKEN="$TOKEN"
 
