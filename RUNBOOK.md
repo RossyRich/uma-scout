@@ -1,6 +1,8 @@
 # ウマスカウト 週次更新手順（自動更新エージェント用）
 
-毎週土曜・日曜の朝8時(JST)に実行し、当日の中央競馬全レースのAI予想を生成して公開する。
+毎朝8時(JST)に実行し、**中央競馬の開催日なら**当日の全レースのAI予想を生成して公開する。
+開催日は土日に限らない（月曜祝日・年始の平日などもある）。曜日ではなく `python3 racedays.py --check` で判定する（終了コード0=開催日、1=非開催日。非開催日は何もせず終了）。
+開催日の一覧は `racedays.py` が netkeiba の開催カレンダーから `predictions/schedule.json` に保存し、サイトの日付ボタン（土日月の3日開催なども並ぶ）に使う。GitHub Actions(results.yml)が毎日更新する。
 
 ## 手順
 
@@ -15,7 +17,7 @@
    ```
    - 「開催なし」と出た場合は中央競馬の開催がない日なので、結果集計分だけcommit/pushして終了してよい。
    - 成功すると `data/YYYYMMDD.json` ができる。
-   - **当日分のみ**を予想・公開する（翌日分を先に作らないこと。日曜の予想は日曜朝に公開する運用）。
+   - **当日分のみ**を予想・公開する（翌日分を先に作らないこと。各開催日の予想はその日の朝に公開する運用）。
 4. `data/YYYYMMDD.json` を読み、**全レースを自分で予想**して `predictions/tmp_<会場ローマ字>.json` を会場ごとに書く（会場が3つなら3ファイル）。フォーマットは下記「予想JSONフォーマット」を厳守。
    - 分析観点: 過去5走の着順・上がり・通過順・相手関係、距離/コース適性、馬場、脚質とペース想定、騎手、斤量、間隔、オッズ(市場評価)。
    - 新馬戦は血統(父)・厩舎・騎手・オッズから判断。
@@ -92,7 +94,7 @@
 
 レースが確定するたびに予想画面へ結果を出すため、`results/live.json` を開催中に更新している。
 
-- 更新役: Mac の launchd ジョブ `com.rossyrich.umascout.live`（15分おき / 土日9〜18時台のみ動作）
+- 更新役: Mac の launchd ジョブ `com.rossyrich.umascout.live`（15分おき / 開催日の9〜18時台のみ動作。開催日＝当日の予想ファイルがある日）
   - 実体は `live_update.sh` → `python3 results.py --live` → live.json を commit & push
   - 設定ファイル: `~/Library/LaunchAgents/com.rossyrich.umascout.live.plist`
   - ログ: `/tmp/umascout-live.log`

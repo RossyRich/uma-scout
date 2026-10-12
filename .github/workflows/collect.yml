@@ -14,8 +14,9 @@ name: collect
 on:
   workflow_dispatch:
   schedule:
-    # 17:00 UTC(金・土) = 翌02:00 JST(土・日)。遅延3〜4時間を見込んで朝5〜6時着を狙う。
-    - cron: "0 17 * * 5,6"
+    # 17:00 UTC = 翌02:00 JST。遅延3〜4時間を見込んで朝5〜6時着を狙う。
+    # 土日に限らず月曜祝日などの開催もあるので毎日走らせる。非開催日は収集0件で即終了する。
+    - cron: "0 17 * * *"
 
 permissions:
   contents: write

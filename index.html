@@ -53,8 +53,8 @@ header{padding:20px 16px 0 16px}
 .brand h1{font-size:26px;font-weight:900;letter-spacing:.06em;white-space:nowrap}
 .brand h1 .u{color:var(--accent)}
 .brand .en{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:.3em;color:var(--sub);text-transform:uppercase}
-.dateline{display:flex;align-items:center;justify-content:space-between;margin-top:14px}
-.dates{display:flex;gap:8px}
+.dateline{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:14px}
+.dates{display:flex;flex-wrap:wrap;gap:8px}
 .datebtn{
   border:1px solid var(--line);background:var(--panel);color:var(--sub);
   padding:5px 14px;border-radius:3px;font-size:13px;font-weight:700;cursor:pointer;
@@ -299,17 +299,44 @@ function jstDate(offsetDays){
   return d.toISOString().slice(0,10).replace(/-/g,"");
 }
 
+function dayDiff(a,b){
+  const t=s=>Date.UTC(+s.slice(0,4),+s.slice(4,6)-1,+s.slice(6,8));
+  return Math.round((t(b)-t(a))/86400000);
+}
+
+// 表示する日付ボタン: 開催日カレンダー(schedule.json)から「今の開催週」の開催日を並べる。
+// 土日に限らず、月曜祝日などの連続開催もひとまとまりで出す。未公開の日は朝8時公開の案内になる。
+function pickRaceWeek(sched, published, today){
+  if(!sched.length){
+    // カレンダーが読めないときは従来どおり土日で判定する
+    const dow=new Date(Date.now()+9*3600*1000).getUTCDay();
+    if(dow===6) return [today,jstDate(1)];
+    if(dow===0) return [jstDate(-1),today];
+    return published.slice(0,2).sort();
+  }
+  const all=[...new Set([...sched,...published])].sort();
+  const groups=[];
+  all.forEach(d=>{
+    const g=groups[groups.length-1];
+    if(g&&dayDiff(g[g.length-1],d)<=1) g.push(d); else groups.push([d]);
+  });
+  // 今日を含む開催週 → なければ直近に終わった開催週
+  let g=groups.find(x=>x.includes(today));
+  if(!g){
+    const past=groups.filter(x=>x[x.length-1]<today);
+    g=past.length?past[past.length-1]:groups[0];
+  }
+  return g;
+}
+
 async function init(){
   try{
     const idx=await (await fetch("predictions/index.json",{cache:"no-store"})).json();
     const params=new URLSearchParams(location.search);
     const today=jstDate(0);
-    const dow=new Date(Date.now()+9*3600*1000).getUTCDay();
-    // 表示する日付ボタン: 週末は今週の土日(未公開日も含む)、平日は直近の公開分
-    let buttons;
-    if(dow===6) buttons=[today,jstDate(1)];
-    else if(dow===0) buttons=[jstDate(-1),today];
-    else buttons=idx.dates.slice(0,2).sort();
+    let sched=[];
+    try{ sched=(await (await fetch("predictions/schedule.json",{cache:"no-store"})).json()).dates||[]; }catch(e){}
+    const buttons=pickRaceWeek(sched, idx.dates, today);
     let date=params.get("date")||(buttons.includes(today)?today:buttons[buttons.length-1]);
     if(!buttons.includes(date)&&!idx.dates.includes(date)) date=buttons[buttons.length-1];
     const db=$("#dates"); db.innerHTML="";

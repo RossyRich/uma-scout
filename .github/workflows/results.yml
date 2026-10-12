@@ -33,6 +33,14 @@ jobs:
       - name: 未集計分を集計
         run: python3 results.py --auto
 
+      # 土日以外(月曜祝日など)の開催日もサイトの日付ボタンに出すため、
+      # netkeibaの開催カレンダーから開催日一覧を毎日取り直す
+      - name: 開催日カレンダーを更新
+        run: |
+          python3 racedays.py || echo "(カレンダー取得失敗。既存のschedule.jsonを維持)"
+          mkdir -p staging_sched
+          cp -f predictions/schedule.json staging_sched/ 2>/dev/null || true
+
       - name: 生成物を退避
         run: |
           mkdir -p staging
@@ -51,6 +59,7 @@ jobs:
 
             mkdir -p results
             cp -f staging/*.json results/ 2>/dev/null || true
+            cp -f staging_sched/schedule.json predictions/ 2>/dev/null || true
 
             # リモートに新しい結果が増えていた場合に備えてindexを作り直す
             python3 - <<'PY'
@@ -63,7 +72,7 @@ jobs:
           json.dump({"dates": dates}, open("results/index.json", "w"))
           PY
 
-            git add -A results/
+            git add -A results/ predictions/schedule.json
             if git diff --cached --quiet; then
               echo "集計対象なし"
               exit 0

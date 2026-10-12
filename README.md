@@ -1,6 +1,6 @@
 # ウマスカウト◎ — AI競馬予想
 
-Claudeが毎週土日の朝8時に中央競馬の全レースを予想するWebサイト。
+Claudeが中央競馬の開催日（土日・月曜祝日など）の朝8時に全レースを予想するWebサイト。
 
 **公開URL**: https://rossyrich.github.io/uma-scout/
 
@@ -16,7 +16,7 @@ netkeiba ──scrape.py──▶ data/YYYYMMDD.json（出馬表+過去5走+オ�
                         git push ──▶ GitHub Pages
 ```
 
-- 毎週土曜・日曜 朝8時(JST)にスケジュール実行のClaudeエージェントが自動更新（手順は [RUNBOOK.md](RUNBOOK.md)）
+- 毎朝8時(JST)にスケジュール実行のClaudeエージェントが開催日かを判定し、開催日なら自動更新（手順は [RUNBOOK.md](RUNBOOK.md)）
 - 予想の主軸は馬連。単勝・馬連・三連複・三連単の買い目を出す
 - API課金なし（Claudeサブスクリプション内で動作）
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 # 開催中の途中経過(results/live.json)を更新して push する。
 # launchd (com.rossyrich.umascout.live) から15分おきに呼ばれる。
-# 開催時間外・非開催日は即終了するので、平日に呼ばれても実害はない。
+# 開催時間外・非開催日は即終了するので、毎日呼ばれても実害はない。
 # AI判断を使わない純Python処理なので、Claudeを起動しなくても動く。
 set -u
 export PATH="$HOME/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
@@ -14,14 +14,13 @@ cd "$(dirname "$0")" || exit 0
 WATCHDOG=$!
 trap 'kill "$WATCHDOG" 2>/dev/null' EXIT
 
-# 土日の9〜18時台のみ動く
-DOW=$(date +%u)
+# 開催日の9〜18時台のみ動く。曜日では判定しない(月曜祝日などの開催もあるため)。
+# 「今日の予想ファイルがある日」を開催日とみなす
 HOUR=$(date +%H)
-[ "$DOW" -ge 6 ] || exit 0
 { [ "$HOUR" -ge 9 ] && [ "$HOUR" -le 18 ]; } || exit 0
 
 DATE=$(date +%Y%m%d)
-[ -f "predictions/$DATE.json" ] || exit 0   # 予想がない日は何もしない
+[ -f "predictions/$DATE.json" ] || exit 0   # 予想がない日(非開催日)は何もしない
 [ -f "results/$DATE.json" ] && exit 0       # 確定済みなら途中経過は不要
 
 python3 results.py --live >/dev/null 2>&1 || exit 0
