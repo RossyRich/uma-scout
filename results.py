@@ -9,6 +9,7 @@ netkeibaの結果ページから着順・払戻を取得し、predictions/YYYYMM
   python3 results.py 20260718   # 指定日を集計
   python3 results.py --auto     # 未集計の過去日をまとめて集計(当日は17時以降のみ)
   python3 results.py --live     # 当日の途中経過を results/live.json に書き出す
+  python3 results.py --backfill-weighted  # 集計済みの結果に配分方式の払戻を追記
 """
 import sys
 import os
@@ -74,6 +75,98 @@ def judge(bets, payouts):
     return res
 
 
+# 配分方式(払戻をそろえる買い方)の計算に使う確定オッズ。netkeibaオッズAPIの種別番号
+ODDS_TYPE = {"umaren": 4, "wide": 5, "sanrenpuku": 7, "sanrentan": 8}
+
+
+def fetch_odds(race_id, key):
+    """{"0102": オッズ(float), ...}。取消・除外(負の値)は含めない"""
+    t = ODDS_TYPE[key]
+    try:
+        j = json.loads(fetch("https://race.netkeiba.com/api/api_get_jra_odds.html"
+                             f"?race_id={race_id}&type={t}&action=init"))
+    except Exception:
+        return {}
+    d = j.get("data")
+    raw = d.get("odds", {}).get(str(t), {}) if isinstance(d, dict) else {}
+    out = {}
+    for k, v in raw.items():
+        try:
+            o = float(str(v[0]).replace(",", ""))   # ワイドは幅の下限
+        except (ValueError, IndexError, TypeError):
+            continue
+        if o > 0:
+            out[k] = o
+    return out
+
+
+def add_weighted(race_id, bets, payouts, judged):
+    """配分方式で買った場合の払戻 payout_w を judged[券種] に書き足す。
+
+    総額は均等買いと同じ(点数×100円)にそろえ、それを 1/オッズ に比例して配分する。
+    低オッズの目ほど厚く買うので、どの目が当たっても払戻がほぼ同額になる。
+    オッズは確定オッズを使う(購入時のオッズとは少しずれる)。
+    """
+    for key, (_, n, ordered) in BET_TYPES.items():
+        e = judged.get(key)
+        if not e or not e["points"]:
+            continue
+        if key not in ODDS_TYPE:            # 単勝は1点なので均等買いと同じ
+            e["payout_w"] = e["payout"]
+            continue
+        odds = fetch_odds(race_id, key)
+        time.sleep(0.3)
+        if not odds:
+            continue
+        pts = []
+        for p in bets.get(key, []):
+            nums = [int(x) for x in re.findall(r"\d+", str(p))]
+            if len(nums) != n:
+                continue
+            k = "".join(f"{x:02d}" for x in (nums if ordered else sorted(nums)))
+            if k in odds:
+                pts.append((nums, odds[k]))
+        if not pts:
+            continue
+        total = e["points"] * 100
+        inv = sum(1 / o for _, o in pts)
+        ret = 0.0
+        for combo, pay in payouts.get(key, []):
+            for nums, o in pts:
+                if (nums == combo) if ordered else (set(nums) == set(combo)):
+                    ret += total * (1 / o) / inv * pay / 100
+                    break
+        e["payout_w"] = round(ret)
+
+
+def backfill_weighted():
+    """集計済みの結果ファイルに payout_w を後から書き足す(途中で止めても再開できる)"""
+    for path in sorted(glob.glob(os.path.join(BASE, "results", "2*.json"))):
+        d = json.load(open(path, encoding="utf-8"))
+        pred_path = os.path.join(BASE, "predictions", f"{d['date']}.json")
+        if not os.path.exists(pred_path):
+            continue
+        pred = json.load(open(pred_path, encoding="utf-8"))
+        pm = {r["race_id"]: r for v in pred["venues"] for r in v["races"]}
+        todo = [r for r in d["races"]
+                if any(e.get("points") and "payout_w" not in e for e in r["bets"].values())]
+        if not todo:
+            continue
+        for r in todo:
+            p = pm.get(r["race_id"])
+            if not p:
+                continue
+            try:
+                html = fetch(f"https://race.netkeiba.com/race/result.html?race_id={r['race_id']}")
+            except Exception:
+                continue
+            time.sleep(0.3)
+            add_weighted(r["race_id"], p.get("bets", {}), parse_payouts(html), r["bets"])
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(d, f, ensure_ascii=False, separators=(",", ":"))
+        print(f"  配分方式を追記: {d['date']} ({len(todo)}レース)", flush=True)
+
+
 def collect(date, live=False):
     """live=True なら確定済みのレースだけを results/live.json に書き出す(途中経過)"""
     pred_path = os.path.join(BASE, "predictions", f"{date}.json")
@@ -120,6 +213,9 @@ def collect(date, live=False):
                 print(f"  結果未確定: {v['name']}{r['no']}R → この日はスキップ")
                 return False
             top3 = payouts["sanrentan"][0][0]
+            judged = judge(r.get("bets", {}), payouts)
+            if not live:
+                add_weighted(r["race_id"], r.get("bets", {}), payouts, judged)
             nm = {h["num"]: h["name"] for h in r.get("horses", [])}
             hon = (r.get("marks") or [{}])[0]
             races.append({
@@ -131,7 +227,7 @@ def collect(date, live=False):
                 "top3": [{"num": x, "name": nm.get(x, "")} for x in top3],
                 "honmei": {"num": hon.get("num"), "name": hon.get("name", ""),
                            "win": hon.get("num") == top3[0]},
-                "bets": judge(r.get("bets", {}), payouts),
+                "bets": judged,
             })
             print(f"  {v['name']}{r['no']}R 1着:{top3[0]} " +
                   " ".join(k for k, e in races[-1]["bets"].items() if e["hit"]))
@@ -186,6 +282,9 @@ def collect(date, live=False):
 
 
 def main():
+    if "--backfill-weighted" in sys.argv:
+        backfill_weighted()
+        return
     if "--live" in sys.argv:
         # 当日の途中経過を results/live.json に書き出す(開催時間中に繰り返し実行)
         date = datetime.now(JST).strftime("%Y%m%d")

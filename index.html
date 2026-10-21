@@ -228,6 +228,9 @@ details.race.done .rname{color:#b8b6b0}
 .restbl th,.restbl td{padding:8px 6px;text-align:center;border-bottom:1px solid #22242c}
 .restbl th{color:var(--sub);font-weight:700;font-size:11px}
 .restbl td b{color:var(--accent)}
+.roiw{display:block;font-size:10.5px;color:var(--sub);margin-top:2px}
+.roiw.blue{color:#4da3ff}
+.resnote b{color:#8f929e;font-weight:700}
 .blue{color:#4da3ff;font-weight:700}
 .resnote{font-size:10.5px;color:#5c5f6a;margin:6px 2px 0;line-height:1.6}
 .resrace{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:9px 12px;margin-bottom:8px}
@@ -493,7 +496,7 @@ async function renderResults(){
 
   // 自信度×券種 集計
   const agg={};
-  ["S","A","B","C"].forEach(c=>{agg[c]={};BETKEYS.forEach(k=>agg[c][k]={hit:0,lose:0,cost:0,ret:0});});
+  ["S","A","B","C"].forEach(c=>{agg[c]={};BETKEYS.forEach(k=>agg[c][k]={hit:0,lose:0,cost:0,ret:0,costw:0,retw:0});});
   let raceCount=0;
   res.forEach(day=>day.races.forEach(r=>{
     raceCount++;
@@ -503,6 +506,8 @@ async function renderResults(){
       b.hit?c[k].hit++:c[k].lose++;
       c[k].cost+=b.points*100;
       c[k].ret+=b.payout;
+      // 配分方式(低オッズほど厚く買い、どの目が当たっても払戻がそろう買い方)。総額は同じ
+      if(b.payout_w!=null){c[k].costw+=b.points*100;c[k].retw+=b.payout_w;}
     });
   }));
 
@@ -530,19 +535,21 @@ async function renderResults(){
   <div class="tblwrap"><table class="restbl"><tr><th></th>${BETKEYS.map(k=>`<th>${BETNAMES[k]}</th>`).join("")}</tr>`;
   TIERS.forEach(([label,confs])=>{
     const row=BETKEYS.map(k=>{
-      let cost=0,ret=0;
-      confs.forEach(c=>{cost+=agg[c][k].cost;ret+=agg[c][k].ret;});
+      let cost=0,ret=0,costw=0,retw=0;
+      confs.forEach(c=>{const a=agg[c][k];cost+=a.cost;ret+=a.ret;costw+=a.costw;retw+=a.retw;});
       if(!cost) return "<td>-</td>";
       const pct=Math.round(ret/cost*100);
-      return `<td class="${ret>cost?"blue":""}">${pct}%</td>`;
+      // 単勝は1点なので配分の違いが出ない。2点以上の券種だけ下段に配分方式を出す
+      const w=(k!=="tansho"&&costw)?`<span class="roiw ${retw>costw?"blue":""}">${Math.round(retw/costw*100)}%</span>`:"";
+      return `<td><span class="${ret>cost?"blue":""}">${pct}%</span>${w}</td>`;
     }).join("");
     html+=`<tr><th>${label}</th>${row}</tr>`;
   });
   if(w5days.length){
-    html+=`<tr><th>WIN5</th><td colspan="4" class="${w5ret>w5cost?"blue":""}">${w5pct}%</td></tr>`;
+    html+=`<tr><th>WIN5</th><td colspan="${BETKEYS.length}" class="${w5ret>w5cost?"blue":""}">${w5pct}%</td></tr>`;
   }
   html+=`</table></div>
-  <p class="resnote">勝敗は「そのレースの買い目のどれかが的中したか」。回収率は該当する自信度のレースの買い目をすべて100円ずつ買った場合の通算。100%超えは青字。</p>`;
+  <p class="resnote">勝敗は「そのレースの買い目のどれかが的中したか」。回収率は該当する自信度のレースの買い目をすべて買った場合の通算。<b>上段＝1点100円の均等買い</b>、<b>下段＝配分方式</b>（同じ総額を、低オッズの目ほど厚く配分して、どの目が当たっても払戻がそろうように買った場合。確定オッズで計算）。100%超えは青字。</p>`;
 
   // WIN5成績
   if(w5days.length){
